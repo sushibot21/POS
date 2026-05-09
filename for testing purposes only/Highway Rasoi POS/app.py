@@ -29,12 +29,19 @@ TURSO_TOKEN = os.environ.get('TURSO_AUTH_TOKEN', '').strip()
 USE_TURSO = bool(TURSO_URL and TURSO_TOKEN)
 
 if USE_TURSO:
-    import urllib.request, urllib.error
+    import urllib3
 
     _TURSO_HTTP = TURSO_URL
     if _TURSO_HTTP.startswith('libsql://'):
         _TURSO_HTTP = 'https://' + _TURSO_HTTP[len('libsql://'):]
     _TURSO_ENDPOINT = _TURSO_HTTP.rstrip('/') + '/v2/pipeline'
+    # PoolManager keeps TCP+TLS connections alive across queries — cuts ~50-100ms
+    # of handshake overhead per query, which was a major source of slowness.
+    _TURSO_POOL = urllib3.PoolManager(maxsize=8, retries=False, timeout=30.0)
+    _TURSO_HEADERS = {
+        'Authorization': f'Bearer {TURSO_TOKEN}',
+        'Content-Type': 'application/json',
+    }
 
     def _to_turso(v):
         if v is None: return {'type': 'null'}
@@ -146,16 +153,14 @@ if USE_TURSO:
 
         def _post(self, requests):
             body = json.dumps({'requests': requests}).encode('utf-8')
-            req = urllib.request.Request(
-                _TURSO_ENDPOINT, data=body, method='POST',
-                headers={'Authorization': f'Bearer {TURSO_TOKEN}', 'Content-Type': 'application/json'},
-            )
             try:
-                with urllib.request.urlopen(req, timeout=30) as resp:
-                    return json.loads(resp.read().decode('utf-8'))
-            except urllib.error.HTTPError as e:
-                detail = e.read().decode('utf-8', errors='replace')[:500]
-                raise RuntimeError(f'Turso HTTP {e.code}: {detail}')
+                r = _TURSO_POOL.request('POST', _TURSO_ENDPOINT, body=body, headers=_TURSO_HEADERS)
+            except urllib3.exceptions.HTTPError as e:
+                raise RuntimeError(f'Turso transport error: {e}')
+            if r.status >= 400:
+                detail = r.data.decode('utf-8', errors='replace')[:500]
+                raise RuntimeError(f'Turso HTTP {r.status}: {detail}')
+            return json.loads(r.data.decode('utf-8'))
 
         def execute(self, sql, params=None, _into=None):
             if self._closed: raise RuntimeError('Connection is closed')
@@ -415,12 +420,27 @@ def init_db():
     conn.commit(); conn.close()
 
 def get_setting(key, default=''):
-    conn=get_db(); row=conn.execute('SELECT value FROM settings WHERE key=?',(key,)).fetchone(); conn.close()
-    return row['value'] if row else default
+    return get_all_settings().get(key, default)
+
+# Settings change rarely (logo upload, restaurant name, etc.) and are read on
+# every page render. Cache for 60s to avoid one Turso round-trip per request.
+_SETTINGS_CACHE = {'data': None, 'expires_at': 0.0}
+_SETTINGS_TTL = 60.0
 
 def get_all_settings():
+    import time
+    now = time.time()
+    cache = _SETTINGS_CACHE
+    if cache['data'] is not None and cache['expires_at'] > now:
+        return cache['data']
     conn=get_db(); rows=conn.execute('SELECT key,value FROM settings').fetchall(); conn.close()
-    return {r['key']:r['value'] for r in rows}
+    data = {r['key']:r['value'] for r in rows}
+    cache['data'] = data
+    cache['expires_at'] = now + _SETTINGS_TTL
+    return data
+
+def _invalidate_settings_cache():
+    _SETTINGS_CACHE['expires_at'] = 0.0
 
 def broadcast(ev,data=None): socketio.emit('update',{'type':ev,'data':data or {}})
 
@@ -568,6 +588,7 @@ def upload_file():
     conn = get_db()
     conn.execute('INSERT OR REPLACE INTO settings VALUES(?,?)',(f'{field}_url',url))
     conn.commit(); conn.close()
+    _invalidate_settings_cache()
     return jsonify({'ok':True,'url':url})
 
 # Serve uploads when UPLOAD_FOLDER is moved off the static/ tree (e.g. persistent disk in prod)
@@ -1402,7 +1423,7 @@ def api_settings():
     conn=get_db()
     if request.method=='POST':
         for k,v in request.json.items(): conn.execute('INSERT OR REPLACE INTO settings VALUES(?,?)',(k,v))
-        conn.commit(); conn.close(); return jsonify({'ok':True})
+        conn.commit(); conn.close(); _invalidate_settings_cache(); return jsonify({'ok':True})
     rows=conn.execute('SELECT * FROM settings').fetchall(); conn.close(); return jsonify({r['key']:r['value'] for r in rows})
 
 
