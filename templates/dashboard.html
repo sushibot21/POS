@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block head %}
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+.dash { padding:16px; max-width:1300px; margin:0 auto; }
+
+/* TOP BAR */
+.dash-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:10px; }
+.dash-title { font-size:22px; font-weight:800; letter-spacing:-0.5px; }
+.dash-sub { font-size:13px; color:var(--text2); margin-top:2px; }
+.live-dot { display:inline-flex; align-items:center; gap:6px; background:var(--green-bg); border:1px solid #bbf7d0; border-radius:99px; padding:5px 12px; font-size:12px; font-weight:600; color:var(--green); }
+.live-dot::before { content:''; width:7px; height:7px; border-radius:50%; background:var(--green); animation:livePulse 2s infinite; }
+@keyframes livePulse { 0%,100%{box-shadow:0 0 0 0 rgba(13,158,88,0.4)} 50%{box-shadow:0 0 0 6px rgba(13,158,88,0)} }
+
+/* KPI ROW */
+.kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:14px; }
+@media(max-width:900px){ .kpi-row { grid-template-columns:repeat(2,1fr); } }
+@media(max-width:480px){ .kpi-row { grid-template-columns:1fr 1fr; gap:8px; } }
+
+.kpi {
+  background:var(--surface); border:1.5px solid var(--border);
+  border-radius:var(--radius); padding:18px 16px;
+  box-shadow:var(--shadow); position:relative; overflow:hidden;
+  transition:transform 0.15s;
+}
+.kpi:hover { transform:translateY(-2px); box-shadow:var(--shadow-lg); }
+.kpi-accent { position:absolute; top:0; left:0; right:0; height:3px; border-radius:var(--radius) var(--radius) 0 0; }
+.kpi-icon { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; margin-bottom:12px; }
+.kpi-lbl { font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:5px; }
+.kpi-val { font-size:24px; font-weight:800; letter-spacing:-0.5px; font-family:'Plus Jakarta Sans'; line-height:1; }
+.kpi-sub { font-size:11px; color:var(--text3); margin-top:6px; }
+.kpi-trend { position:absolute; top:16px; right:14px; font-size:11px; font-weight:700; padding:3px 8px; border-radius:99px; }
+.trend-up { background:var(--green-bg); color:var(--green); }
+.trend-down { background:var(--red-bg); color:var(--red); }
+
+/* BENTO GRID */
+.bento { display:grid; grid-template-columns:1fr 1fr 1fr; grid-template-rows:auto auto; gap:12px; }
+@media(max-width:900px){ .bento { grid-template-columns:1fr 1fr; } }
+@media(max-width:500px){ .bento { grid-template-columns:1fr; } }
+.bento-wide { grid-column:span 2; }
+.bento-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
+.bc-title { font-size:12px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:14px; display:flex; align-items:center; gap:6px; }
+.bc-title-dot { width:3px; height:12px; background:var(--accent); border-radius:2px; flex-shrink:0; }
+
+/* PERF BAR */
+.perf-wrap { margin-top:4px; }
+.perf-row { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+.perf-num { font-size:32px; font-weight:800; font-family:'Plus Jakarta Sans'; letter-spacing:-1px; }
+.perf-track { height:10px; background:var(--surface3); border-radius:99px; overflow:hidden; }
+.perf-fill { height:100%; border-radius:99px; transition:width 1s cubic-bezier(0.34,1.2,0.64,1); }
+.perf-ticks { display:flex; justify-content:space-between; margin-top:5px; font-size:10px; color:var(--text3); }
+
+/* HOURLY BARS */
+.h-chart { display:flex; align-items:flex-end; gap:5px; height:90px; }
+.h-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; }
+.h-bar { width:100%; background:var(--accent); border-radius:4px 4px 0 0; transition:height 0.6s ease; min-height:3px; opacity:0.85; }
+.h-bar:hover { opacity:1; }
+.h-lbl { font-size:9px; color:var(--text3); font-family:'Plus Jakarta Sans'; }
+
+/* TOP ITEMS */
+.top-row { display:flex; align-items:center; gap:10px; margin-bottom:9px; }
+.top-rank { font-size:11px; font-weight:800; color:var(--text3); width:18px; text-align:center; flex-shrink:0; }
+.top-rank.gold { color:#d97706; }
+.top-rank.silver { color:#9ca3af; }
+.top-rank.bronze { color:#c2856c; }
+.top-info { flex:1; min-width:0; }
+.top-name { font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:3px; }
+.top-track { height:4px; background:var(--surface3); border-radius:99px; overflow:hidden; }
+.top-fill { height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent),var(--accent2)); }
+.top-qty { font-size:11px; font-family:'Plus Jakarta Sans'; color:var(--text2); flex-shrink:0; text-align:right; }
+
+/* PAY SPLIT */
+.pay-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.pay-label { font-size:12px; font-weight:600; min-width:70px; display:flex; align-items:center; gap:5px; }
+.pay-track { flex:1; height:8px; background:var(--surface3); border-radius:99px; overflow:hidden; }
+.pay-fill { height:100%; border-radius:99px; transition:width 0.7s ease; }
+.pay-amt { font-size:12px; font-family:'Plus Jakarta Sans'; font-weight:600; min-width:60px; text-align:right; }
+
+/* LIVE ORDERS */
+.lo-card { background:var(--surface2); border:1.5px solid var(--border); border-radius:10px; padding:11px 13px; margin-bottom:8px; }
+.lo-head { display:flex; justify-content:space-between; align-items:center; }
+.lo-title { font-size:13px; font-weight:700; }
+.lo-time { font-size:10px; color:var(--text3); font-family:'Plus Jakarta Sans'; }
+.lo-detail { display:flex; justify-content:space-between; margin-top:5px; font-size:12px; color:var(--text2); }
+.lo-total { font-family:'Plus Jakarta Sans'; font-weight:700; color:var(--accent); }
+
+/* STOCK */
+.stock-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); }
+.stock-row:last-child { border-bottom:none; }
+.stock-name { font-size:12px; font-weight:500; }
+.stock-num { font-size:13px; font-family:'Plus Jakarta Sans'; font-weight:700; color:var(--red); }
+.stock-threshold { font-size:10px; color:var(--text3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dash">
+  <div class="dash-top">
+    <div>
+      <div class="dash-title">Live Dashboard</div>
+      <div class="dash-sub" id="last-refresh">—</div>
+    </div>
+    <div class="live-dot">Live</div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-accent" style="background:var(--accent)"></div>
+      <div class="kpi-icon" style="background:var(--accent-light)">💰</div>
+      <div class="kpi-lbl">Today's Revenue</div>
+      <div class="kpi-val" id="k-rev">—</div>
+      <div class="kpi-sub" id="k-orders">0 orders</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-accent" style="background:var(--green)"></div>
+      <div class="kpi-icon" style="background:var(--green-bg)">📈</div>
+      <div class="kpi-lbl">Net Profit</div>
+      <div class="kpi-val" id="k-net">—</div>
+      <div class="kpi-sub" id="k-exp-sub">After expenses</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-accent" style="background:var(--yellow)"></div>
+      <div class="kpi-icon" style="background:var(--yellow-bg)">🔥</div>
+      <div class="kpi-lbl">Open Orders</div>
+      <div class="kpi-val" id="k-open">—</div>
+      <div class="kpi-sub">Right now</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-accent" style="background:var(--purple)"></div>
+      <div class="kpi-icon" style="background:var(--purple-bg)">🎯</div>
+      <div class="kpi-lbl">vs Target</div>
+      <div class="kpi-val" id="k-perf">—</div>
+      <div class="kpi-sub" id="k-perf-sub">of daily goal</div>
+    </div>
+  </div>
+
+  <!-- BENTO -->
+  <div class="bento">
+    <!-- PERFORMANCE - wide -->
+    <div class="bento-card bento-wide">
+      <div class="bc-title"><div class="bc-title-dot"></div>Daily Performance</div>
+      <div class="perf-wrap">
+        <div class="perf-row">
+          <div>
+            <div class="perf-num" id="b-perf-pct">0%</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:3px" id="b-perf-msg">Loading...</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--text2)">Revenue / Target</div>
+            <div style="font-size:18px;font-weight:800;font-family:'Plus Jakarta Sans'" id="b-rev-vs">— / —</div>
+          </div>
+        </div>
+        <div class="perf-track">
+          <div class="perf-fill" id="b-perf-bar" style="width:0%"></div>
+        </div>
+        <div class="perf-ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+      </div>
+    </div>
+
+    <!-- LIVE ORDERS -->
+    <div class="bento-card" style="grid-row:span 2">
+      <div class="bc-title"><div class="bc-title-dot"></div>Live Orders <span id="lo-cnt" style="background:var(--accent-light);color:var(--accent);font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;text-transform:none;letter-spacing:0"></span></div>
+      <div id="lo-list"><div style="color:var(--text3);font-size:12px;text-align:center;padding:24px">No open orders</div></div>
+    </div>
+
+    <!-- HOURLY -->
+    <div class="bento-card">
+      <div class="bc-title"><div class="bc-title-dot"></div>Sales by Hour</div>
+      <div class="h-chart" id="h-chart"><div style="color:var(--text3);font-size:12px;width:100%;text-align:center">No data yet</div></div>
+    </div>
+
+    <!-- TOP ITEMS -->
+    <div class="bento-card">
+      <div class="bc-title"><div class="bc-title-dot"></div>Top Selling Today</div>
+      <div id="top-list"><div style="color:var(--text3);font-size:12px;text-align:center;padding:16px">No sales yet</div></div>
+    </div>
+
+    <!-- PAYMENT SPLIT -->
+    <div class="bento-card">
+      <div class="bc-title"><div class="bc-title-dot"></div>Payment Split <span id="pay-split-hint" style="background:var(--accent-light);color:var(--accent);font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;text-transform:none;letter-spacing:0;display:none"></span></div>
+      <div id="pay-split"><div style="color:var(--text3);font-size:12px;text-align:center;padding:16px">No payments yet</div></div>
+    </div>
+
+    <!-- LOW STOCK -->
+    <div class="bento-card">
+      <div class="bc-title"><div class="bc-title-dot"></div>Low Stock Alerts</div>
+      <div id="stock-list"><div style="color:var(--green);font-size:12px;text-align:center;padding:12px">✓ All items well stocked</div></div>
+    </div>
+
+    <!-- EXPENSE SUMMARY -->
+    <div class="bento-card">
+      <div class="bc-title"><div class="bc-title-dot"></div>Today's Expenses</div>
+      <div id="exp-list"><div style="color:var(--text3);font-size:12px;text-align:center;padding:16px">No expenses today</div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const C='{{ settings.currency }}';
+
+async function load(){
+  const [an, openR] = await Promise.all([
+    fetch('/api/analytics/today').then(r=>r.json()),
+    fetch('/api/orders/open').then(r=>r.json())
+  ]);
+  renderKPI(an); renderPerf(an); renderHourly(an.hourly);
+  renderTop(an.top_items); renderPay(an.payment_breakdown, an.revenue.total + (an.due_collected_total||0), an.due_collected_total||0);
+  renderStock(an.low_stock); renderExp(an.expenses.total);
+  renderLiveOrders(openR);
+  document.getElementById('last-refresh').textContent='Updated ' + new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+function renderKPI(d){
+  document.getElementById('k-rev').textContent=C+Math.round(d.revenue.total).toLocaleString('en-IN');
+  document.getElementById('k-orders').textContent=`${d.revenue.orders} orders closed today`;
+  const net=d.net;
+  const nEl=document.getElementById('k-net');
+  nEl.textContent=(net>=0?'+':'')+C+Math.abs(Math.round(net)).toLocaleString('en-IN');
+  nEl.style.color=net>=0?'var(--green)':'var(--red)';
+  document.getElementById('k-exp-sub').textContent=`-${C}${Math.round(d.expenses.total)} expenses`;
+  document.getElementById('k-open').textContent=d.open_orders;
+  document.getElementById('k-perf').textContent=d.performance_pct+'%';
+  document.getElementById('k-perf-sub').textContent=`of ${C}${Math.round(d.baseline)} daily goal`;
+}
+
+function renderPerf(d){
+  const pct=d.performance_pct;
+  document.getElementById('b-perf-pct').textContent=pct+'%';
+  const color=pct>=100?'var(--green)':pct>=70?'var(--yellow)':'var(--accent)';
+  document.getElementById('b-perf-pct').style.color=color;
+  const fill=document.getElementById('b-perf-bar');
+  fill.style.width=Math.min(pct,100)+'%';
+  fill.style.background=color;
+  const msg=pct>=100?'🎉 Excellent! Target exceeded!':pct>=80?'👍 Great performance today':pct>=50?'📈 Halfway there, keep going!':'⚠️ Below target — push for more orders';
+  document.getElementById('b-perf-msg').textContent=msg;
+  document.getElementById('b-rev-vs').textContent=`${C}${Math.round(d.revenue.total).toLocaleString('en-IN')} / ${C}${Math.round(d.baseline).toLocaleString('en-IN')}`;
+}
+
+function renderHourly(h){
+  if(!h.length) return;
+  const max=Math.max(...h.map(x=>x.amount),1);
+  document.getElementById('h-chart').innerHTML=h.map(x=>`
+    <div class="h-col">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:2px">${x.amount>=1000?(x.amount/1000).toFixed(1)+'k':Math.round(x.amount)}</div>
+      <div class="h-bar" style="height:${Math.max((x.amount/max)*72,3)}px" title="${C}${Math.round(x.amount)}"></div>
+      <div class="h-lbl">${x.hour}</div>
+    </div>`).join('');
+}
+
+function renderTop(items){
+  if(!items.length) return;
+  const max=Math.max(...items.map(i=>i.qty),1);
+  const ranks=['gold','silver','bronze'];
+  document.getElementById('top-list').innerHTML=items.map((i,idx)=>`
+    <div class="top-row">
+      <div class="top-rank ${ranks[idx]||''}">${idx+1}</div>
+      <div class="top-info">
+        <div class="top-name">${i.item_name}</div>
+        <div class="top-track"><div class="top-fill" style="width:${(i.qty/max)*100}%"></div></div>
+      </div>
+      <div class="top-qty">
+        <div>${i.qty}x</div>
+        <div style="font-size:10px;color:var(--text3)">${C}${Math.round(i.revenue)}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderPay(breakdown, total, dueCollected){
+  const hint=document.getElementById('pay-split-hint');
+  if(dueCollected>0){
+    hint.textContent=`incl. ${C}${Math.round(dueCollected)} dues received`;
+    hint.style.display='';
+  } else { hint.style.display='none'; }
+  if(!breakdown.length) return;
+  const colors={cash:'var(--green)',upi:'var(--blue)',card:'var(--purple)'};
+  const icons={cash:'💵',upi:'📱',card:'💳'};
+  document.getElementById('pay-split').innerHTML=breakdown.map(p=>`
+    <div class="pay-row">
+      <div class="pay-label">${icons[p.payment_method]||'💰'} ${p.payment_method||'other'}</div>
+      <div class="pay-track"><div class="pay-fill" style="width:${total>0?(p.amount/total*100):0}%;background:${colors[p.payment_method]||'var(--accent)'}"></div></div>
+      <div class="pay-amt">${C}${Math.round(p.amount)}</div>
+    </div>`).join('');
+}
+
+function renderStock(items){
+  if(!items.length) return;
+  document.getElementById('stock-list').innerHTML=items.map(i=>`
+    <div class="stock-row">
+      <div class="stock-name">${i.name}</div>
+      <div>
+        <span class="stock-num">${i.stock}</span>
+        <span class="stock-threshold"> / min ${i.low_stock_threshold}</span>
+      </div>
+    </div>`).join('');
+}
+
+function renderExp(total){
+  fetch('/api/expenses').then(r=>r.json()).then(exps=>{
+    if(!exps.length) return;
+    document.getElementById('exp-list').innerHTML=`
+      <div style="display:flex;justify-content:space-between;padding:0 0 10px;border-bottom:1.5px solid var(--border);margin-bottom:8px">
+        <span style="font-size:12px;font-weight:700">Total</span>
+        <span style="font-family:'Plus Jakarta Sans';font-weight:800;color:var(--red)">${C}${Math.round(total)}</span>
+      </div>
+      ${exps.slice(0,4).map(e=>`
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
+          <span style="color:var(--text2)">${e.description}</span>
+          <span style="font-family:'Plus Jakarta Sans';font-weight:600">${C}${e.amount}</span>
+        </div>`).join('')}`;
+  });
+}
+
+function renderLiveOrders(orders){
+  document.getElementById('lo-cnt').textContent=orders.length;
+  if(!orders.length){
+    document.getElementById('lo-list').innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:24px">No open orders right now</div>';
+    return;
+  }
+  document.getElementById('lo-list').innerHTML=orders.map(o=>{
+    const elapsed=Math.round((Date.now()-new Date(o.created_at).getTime())/60000);
+    return `<div class="lo-card">
+      <div class="lo-head">
+        <div class="lo-title">${o.order_type==='dine_in'?`🪑 Table ${o.table_number||'?'}`:`🥡 ${o.customer_name||'Walk-in'}`}</div>
+        <div class="lo-time">${elapsed}m ago</div>
+      </div>
+      <div class="lo-detail">
+        <span>#${o.id} · ${o.item_count} items</span>
+        <span class="lo-total">${C}${Math.round(o.total||0)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function onRealtimeUpdate(){load();}
+load();
+setInterval(load, 10000);
+</script>
+{% endblock %}

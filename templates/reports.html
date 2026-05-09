@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block head %}
+<style>
+.rpt { padding:20px; max-width:1200px; margin:0 auto; }
+
+/* PERIOD PILLS */
+.period-pills { display:flex; gap:6px; flex-wrap:wrap; }
+.period-pill { padding:7px 16px; border-radius:99px; font-size:13px; font-weight:600; background:var(--surface); border:1.5px solid var(--border); color:var(--text2); cursor:pointer; transition:all 0.15s; }
+.period-pill:hover { border-color:var(--border2); color:var(--text); }
+.period-pill.active { background:var(--accent); border-color:var(--accent); color:white; box-shadow:0 2px 8px rgba(37,99,235,0.3); }
+.period-custom { display:flex; gap:6px; align-items:center; }
+
+/* PERF BANNER */
+.perf-banner { border-radius:var(--radius); padding:22px 24px; margin-bottom:16px; color:white; }
+.perf-grid { display:grid; grid-template-columns:1fr auto; gap:20px; align-items:center; }
+.perf-pct-big { font-size:48px; font-weight:800; font-family:'Plus Jakarta Sans'; letter-spacing:-2px; line-height:1; }
+.perf-track { height:8px; background:rgba(255,255,255,0.25); border-radius:99px; overflow:hidden; margin-top:14px; }
+.perf-fill { height:100%; border-radius:99px; background:rgba(255,255,255,0.9); transition:width 0.8s ease; }
+.perf-stats { display:flex; gap:12px; flex-wrap:wrap; }
+.ps { text-align:center; background:rgba(255,255,255,0.15); border-radius:10px; padding:10px 14px; }
+.ps-val { font-size:20px; font-weight:800; font-family:'Plus Jakarta Sans'; }
+.ps-lbl { font-size:10px; opacity:0.7; margin-top:2px; }
+
+/* SUMMARY */
+.sum-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+@media(max-width:700px){.sum-row{grid-template-columns:1fr 1fr;}}
+.sum-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); text-align:center; }
+.sum-val { font-size:24px; font-weight:800; font-family:'Plus Jakarta Sans'; }
+.sum-lbl { font-size:11px; color:var(--text2); margin-top:4px; }
+
+/* GRIDS */
+.rpt-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media(max-width:700px){.rpt-grid{grid-template-columns:1fr;}}
+.rpt-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
+.rpt-card.full { grid-column:1/-1; }
+.bc-title { font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:14px; display:flex; align-items:center; gap:6px; }
+.bc-dot { width:3px; height:12px; background:var(--accent); border-radius:2px; flex-shrink:0; }
+
+/* DAILY TREND CHART */
+.trend-chart { display:flex; align-items:flex-end; gap:3px; height:80px; }
+.tc-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; }
+.tc-bar { width:100%; background:linear-gradient(180deg,var(--accent),var(--accent2)); border-radius:3px 3px 0 0; min-height:3px; transition:height 0.5s ease; }
+.tc-lbl { font-size:8px; color:var(--text3); font-family:'Plus Jakarta Sans'; white-space:nowrap; }
+
+/* TABLES */
+.rt { width:100%; border-collapse:collapse; font-size:13px; }
+.rt th { text-align:left; padding:8px 8px; font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.3px; border-bottom:1.5px solid var(--border); }
+.rt td { padding:9px 8px; border-bottom:1px solid var(--surface3); }
+.rt tr:hover td { background:var(--surface2); }
+.rt tr:last-child td { border-bottom:none; }
+
+/* DAY-BY-DAY */
+.day-row { display:flex; justify-content:space-between; align-items:center; padding:8px; border-radius:var(--radius-sm); margin-bottom:4px; }
+.day-row:hover { background:var(--surface2); }
+.day-bar-wrap { flex:1; margin:0 12px; }
+.day-bar-track { height:6px; background:var(--surface3); border-radius:99px; overflow:hidden; }
+.day-bar-fill { height:100%; border-radius:99px; background:var(--accent); transition:width 0.5s; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="rpt">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px">Sales Reports</div>
+      <div style="font-size:13px;color:var(--text2)" id="rpt-date-range">—</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-ghost btn-sm" onclick="OM('exp-modal')">💸 Add Expense</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV Export</button>
+      <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 Print</button>
+    </div>
+  </div>
+
+  <!-- PERIOD SELECTOR -->
+  <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)">
+    <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Select Period</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <div class="period-pills">
+        <div class="period-pill active" onclick="setPeriod('today')" id="pp-today">Today</div>
+        <div class="period-pill" onclick="setPeriod('week')" id="pp-week">This Week</div>
+        <div class="period-pill" onclick="setPeriod('month')" id="pp-month">This Month</div>
+        <div class="period-pill" onclick="setPeriod('last_month')" id="pp-last_month">Last Month</div>
+        <div class="period-pill" onclick="setPeriod('7d')" id="pp-7d">Last 7 Days</div>
+        <div class="period-pill" onclick="setPeriod('30d')" id="pp-30d">Last 30 Days</div>
+        <div class="period-pill" onclick="showCustom()" id="pp-custom">Custom Range</div>
+      </div>
+      <div class="period-custom" id="custom-range" style="display:none">
+        <input type="date" id="r-start" style="width:140px">
+        <span style="color:var(--text3)">to</span>
+        <input type="date" id="r-end" style="width:140px">
+        <button class="btn btn-primary btn-sm" onclick="applyCustom()">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERF BANNER -->
+  <div class="perf-banner" id="p-banner" style="background:var(--accent);margin-bottom:16px">
+    <div class="perf-grid">
+      <div>
+        <div style="font-size:13px;font-weight:700;opacity:0.8;margin-bottom:4px" id="p-period-label">Today</div>
+        <div class="perf-pct-big" id="p-pct">0%</div>
+        <div style="font-size:13px;opacity:0.85;margin-top:4px" id="p-msg">Loading...</div>
+        <div class="perf-track"><div class="perf-fill" id="p-bar" style="width:0%"></div></div>
+      </div>
+      <div class="perf-stats">
+        <div class="ps"><div class="ps-val" id="ps-rev">—</div><div class="ps-lbl">Revenue</div></div>
+        <div class="ps"><div class="ps-val" id="ps-orders">—</div><div class="ps-lbl">Orders</div></div>
+        <div class="ps"><div class="ps-val" id="ps-avg">—</div><div class="ps-lbl">Avg Order</div></div>
+        <div class="ps"><div class="ps-val" id="ps-net">—</div><div class="ps-lbl">Net</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUMMARY CARDS -->
+  <div class="sum-row">
+    <div class="sum-card"><div class="sum-val" style="color:var(--green)" id="s-rev">—</div><div class="sum-lbl">💰 Revenue</div></div>
+    <div class="sum-card"><div class="sum-val" style="color:var(--red)" id="s-exp">—</div><div class="sum-lbl">💸 Expenses</div></div>
+    <div class="sum-card"><div class="sum-val" id="s-net">—</div><div class="sum-lbl">📊 Net Profit</div></div>
+    <div class="sum-card"><div class="sum-val" id="s-orders">—</div><div class="sum-lbl">🧾 Orders</div></div>
+  </div>
+
+  <div class="rpt-grid">
+    <!-- DAILY TREND -->
+    <div class="rpt-card bento-wide" style="grid-column:1/-1" id="trend-section">
+      <div class="bc-title"><div class="bc-dot"></div>Daily Revenue Trend <span id="trend-subtitle" style="color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:4px"></span></div>
+      <div class="trend-chart" id="trend-chart"><div style="color:var(--text3);font-size:12px;width:100%;text-align:center">No data</div></div>
+      <!-- DAY BY DAY -->
+      <div id="day-by-day" style="margin-top:14px"></div>
+    </div>
+
+    <!-- PAYMENT -->
+    <div class="rpt-card">
+      <div class="bc-title"><div class="bc-dot"></div>Cash Flow · Money Received</div>
+      <div id="cashflow-summary" style="background:var(--green-bg,#dcfce7);border:1px solid #86efac;border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px">Total Cash In</div>
+          <div style="font-size:18px;font-weight:800;font-family:'Plus Jakarta Sans';color:var(--green)" id="cashflow-total">—</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--text2)">From Orders / From Due Collections</div>
+          <div style="font-size:11px;color:var(--text2);font-family:'Plus Jakarta Sans'" id="cashflow-split">—</div>
+        </div>
+      </div>
+      <table class="rt" id="pay-tbl"></table>
+    </div>
+
+    <!-- TOP ITEMS -->
+    <div class="rpt-card">
+      <div class="bc-title"><div class="bc-dot"></div>Top Selling Items</div>
+      <table class="rt" id="items-tbl"></table>
+    </div>
+  </div>
+
+  <!-- DAILY SHEET (shown only for single day) -->
+  <div id="daily-section" style="margin-top:14px;display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:16px;font-weight:700">Daily Sheet</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="go(-1)">← Prev Day</button>
+        <button class="btn btn-ghost btn-sm" onclick="go(1)">Next Day →</button>
+      </div>
+    </div>
+    <div class="rpt-grid">
+      <div class="rpt-card"><div class="bc-title"><div class="bc-dot"></div>Expenses</div><table class="rt"><thead><tr><th>Description</th><th>Category</th><th>Amount</th></tr></thead><tbody id="exp-body"></tbody></table></div>
+      <div class="rpt-card"><div class="bc-title"><div class="bc-dot"></div>Orders Log</div><table class="rt"><thead><tr><th>#</th><th>Type</th><th>Customer</th><th>Payment</th><th>Total</th><th>Time</th></tr></thead><tbody id="ord-body"></tbody></table></div>
+      <div class="rpt-card full" id="due-collections-card" style="display:none">
+        <div class="bc-title"><div class="bc-dot"></div>Due Payments Received <span id="due-coll-total" style="color:var(--green);font-weight:700;text-transform:none;letter-spacing:0;font-size:13px;margin-left:6px"></span></div>
+        <table class="rt"><thead><tr><th>Time</th><th>Customer</th><th>Amount</th><th>Payment Method</th><th>Notes</th></tr></thead><tbody id="due-coll-body"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD EXPENSE MODAL -->
+<div class="modal-overlay" id="exp-modal">
+  <div class="modal" style="min-width:360px">
+    <div class="modal-header"><div class="modal-title">💸 Record Expense</div><button class="modal-close" onclick="CM('exp-modal')">✕</button></div>
+    <div style="display:grid;gap:12px">
+      <div><label>Description</label><input type="text" id="exp-desc" placeholder="e.g. Vegetables, electricity bill..."></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label>Amount (₹)</label><input type="number" id="exp-amt" placeholder="0" min="0"></div>
+        <div><label>Category</label>
+          <select id="exp-cat">
+            <option value="ingredients">Ingredients</option>
+            <option value="utilities">Utilities</option>
+            <option value="staff">Staff</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="justify-content:center" onclick="addExpense()">Add Expense</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const C = '{{ settings.currency }}';
+// Local YYYY-MM-DD (avoids UTC offset bug — toISOString() rolls back a day before midnight UTC)
+function localDate(d){d=d||new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+let curPeriod = 'today', curDate = localDate(), rData = null, rangeData = null;
+
+function setPeriod(p) {
+  curPeriod = p;
+  document.querySelectorAll('.period-pill').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`pp-${p}`);
+  if (el) el.classList.add('active');
+  document.getElementById('custom-range').style.display = 'none';
+  loadData();
+}
+
+function showCustom() {
+  document.querySelectorAll('.period-pill').forEach(el => el.classList.remove('active'));
+  document.getElementById('pp-custom').classList.add('active');
+  document.getElementById('custom-range').style.display = 'flex';
+  const today = localDate();
+  document.getElementById('r-end').value = today;
+  document.getElementById('r-start').value = today;
+}
+
+function applyCustom() {
+  const s = document.getElementById('r-start').value;
+  const e = document.getElementById('r-end').value;
+  if (!s || !e) return;
+  curPeriod = 'custom';
+  loadData(s, e);
+}
+
+function go(delta) {
+  const d = new Date(curDate+'T00:00'); d.setDate(d.getDate() + delta);
+  curDate = localDate(d);
+  curPeriod = 'today'; // treat as single day
+  loadData();
+}
+
+const periodLabels = {today:'Today',week:'This Week',month:'This Month',last_month:'Last Month','7d':'Last 7 Days','30d':'Last 30 Days',custom:'Custom Range'};
+
+async function loadData(customStart, customEnd) {
+  let url = `/api/analytics/range?period=${curPeriod}`;
+  if (curPeriod === 'today') url = `/api/daily_sheet?date=${curDate}`;
+  else if (customStart) url = `/api/analytics/range?period=custom&start=${customStart}&end=${customEnd}`;
+  const r = await fetch(url);
+  const d = await r.json();
+
+  if (curPeriod === 'today') {
+    rData = d; renderDailySheet(d);
+  } else {
+    rangeData = d; renderRange(d);
+  }
+}
+
+function renderDailySheet(d) {
+  const pLabel = new Date(d.date).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('rpt-date-range').textContent = pLabel;
+  document.getElementById('p-period-label').textContent = pLabel;
+
+  const pct = d.performance_pct;
+  const color = pct>=100?'#0d9e58':pct>=70?'#d97706':'#2563eb';
+  document.getElementById('p-banner').style.background = color;
+  document.getElementById('p-pct').textContent = pct + '%';
+  document.getElementById('p-bar').style.width = Math.min(pct,100) + '%';
+  document.getElementById('p-msg').textContent = pct>=100?'🎉 Target exceeded!':pct>=70?'👍 Good day':pct>=40?'📈 On track':'⚠️ Below target';
+  document.getElementById('ps-rev').textContent = C+Math.round(d.totals.revenue).toLocaleString('en-IN');
+  document.getElementById('ps-orders').textContent = d.orders.length;
+  const avg = d.orders.length ? Math.round(d.totals.revenue/d.orders.length) : 0;
+  document.getElementById('ps-avg').textContent = C + avg;
+  const net = d.net;
+  document.getElementById('ps-net').textContent = (net>=0?'+':'')+C+Math.round(Math.abs(net));
+
+  document.getElementById('s-rev').textContent = C+Math.round(d.totals.revenue).toLocaleString('en-IN');
+  document.getElementById('s-exp').textContent = C+Math.round(d.expense_total).toLocaleString('en-IN');
+  const nEl = document.getElementById('s-net');
+  nEl.textContent = (net>=0?'+':'')+C+Math.round(net).toLocaleString('en-IN');
+  nEl.style.color = net>=0?'var(--green)':'var(--red)';
+  document.getElementById('s-orders').textContent = d.orders.length;
+
+  // Hourly as trend
+  if (d.hourly.length) {
+    const max = Math.max(...d.hourly.map(h=>h.amount),1);
+    document.getElementById('trend-chart').innerHTML = d.hourly.map(h=>`
+      <div class="tc-col">
+        <div style="font-size:9px;color:var(--text3)">${Math.round(h.amount)>=1000?(h.amount/1000).toFixed(1)+'k':Math.round(h.amount)||''}</div>
+        <div class="tc-bar" style="height:${Math.max((h.amount/max)*70,3)}px"></div>
+        <div class="tc-lbl">${h.hour}h</div>
+      </div>`).join('');
+  }
+  document.getElementById('day-by-day').innerHTML = '';
+
+  renderPayTable(d.payment_breakdown, d.totals.revenue + (d.due_collected_total||0), d.due_collected_total);
+  renderItemsTable(d.items_summary);
+
+  // Expenses & orders log
+  document.getElementById('daily-section').style.display = '';
+  document.getElementById('exp-body').innerHTML = d.expenses.length ?
+    d.expenses.map(e=>`<tr><td>${e.description}</td><td><span class="badge badge-red">${e.category}</span></td><td class="mono" style="color:var(--red)">${C}${e.amount}</td></tr>`).join('') :
+    '<tr><td colspan="3" style="color:var(--text3)">No expenses</td></tr>';
+  document.getElementById('ord-body').innerHTML = d.orders.length ?
+    d.orders.map(o=>`<tr><td class="mono" style="color:var(--text3)">#${o.id}</td><td>${o.order_type==='dine_in'?`T${o.table_number||''}`:'TW'}</td><td style="font-size:11px;color:var(--text2)">${o.customer_name||'—'}</td><td><span class="badge ${o.is_due?'badge-red':'badge-green'}">${o.is_due?'DUE':o.payment_method||'paid'}</span></td><td class="mono">${C}${Math.round(o.total)}</td><td style="color:var(--text3);font-size:11px">${o.closed_at?new Date(o.closed_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—'}</td></tr>`).join('') :
+    '<tr><td colspan="6" style="color:var(--text3)">No orders</td></tr>';
+
+  // Due payments received today
+  const dueList = d.due_payments_list || [];
+  const dueCard = document.getElementById('due-collections-card');
+  if (dueList.length) {
+    dueCard.style.display = '';
+    document.getElementById('due-coll-total').textContent = `(+${C}${Math.round(d.due_collected_total||0).toLocaleString('en-IN')} collected)`;
+    const payIcons = {cash:'💵 Cash',upi:'📱 UPI',card:'💳 Card'};
+    document.getElementById('due-coll-body').innerHTML = dueList.map(p => `
+      <tr>
+        <td style="color:var(--text3);font-size:11px">${p.created_at?new Date(p.created_at.replace(' ','T')).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—'}</td>
+        <td style="font-weight:600">${p.customer_name || '—'}</td>
+        <td class="mono" style="color:var(--green);font-weight:700">+${C}${Math.round(p.amount)}</td>
+        <td><span class="badge badge-green">${payIcons[p.payment_method] || p.payment_method || 'cash'}${p.payment_subtype?' · '+p.payment_subtype:''}</span></td>
+        <td style="font-size:11px;color:var(--text2)">${p.notes || '—'}</td>
+      </tr>`).join('');
+  } else {
+    dueCard.style.display = 'none';
+  }
+}
+
+function renderRange(d) {
+  document.getElementById('rpt-date-range').textContent = `${d.start} → ${d.end}`;
+  document.getElementById('p-period-label').textContent = periodLabels[d.period] || 'Custom';
+  document.getElementById('daily-section').style.display = 'none';
+
+  const rev = d.summary.revenue; const orders = d.summary.orders;
+  const days = d.daily.length || 1;
+  const baseline = d.baseline * days;
+  const pct = Math.round((rev/baseline*100) || 0);
+  const color = pct>=100?'#0d9e58':pct>=70?'#d97706':'#2563eb';
+  document.getElementById('p-banner').style.background = color;
+  document.getElementById('p-pct').textContent = pct + '%';
+  document.getElementById('p-bar').style.width = Math.min(pct,100) + '%';
+  document.getElementById('p-msg').textContent = pct>=100?'🎉 Exceeded target!':pct>=70?'👍 Good period':pct>=40?'📈 Moderate':'⚠️ Below expectations';
+  document.getElementById('ps-rev').textContent = C+Math.round(rev).toLocaleString('en-IN');
+  document.getElementById('ps-orders').textContent = orders;
+  document.getElementById('ps-avg').textContent = C + Math.round(orders ? rev/orders : 0);
+  const net = rev - d.expenses.total;
+  document.getElementById('ps-net').textContent = (net>=0?'+':'')+C+Math.round(Math.abs(net));
+
+  document.getElementById('s-rev').textContent = C+Math.round(rev).toLocaleString('en-IN');
+  document.getElementById('s-exp').textContent = C+Math.round(d.expenses.total).toLocaleString('en-IN');
+  const nEl=document.getElementById('s-net');
+  nEl.textContent=(net>=0?'+':'')+C+Math.round(net).toLocaleString('en-IN');
+  nEl.style.color=net>=0?'var(--green)':'var(--red)';
+  document.getElementById('s-orders').textContent=orders;
+
+  // Daily trend chart
+  if (d.daily.length) {
+    const max = Math.max(...d.daily.map(x=>x.revenue),1);
+    document.getElementById('trend-chart').innerHTML = d.daily.map(day=>`
+      <div class="tc-col" title="${day.day}: ${C}${Math.round(day.revenue)}">
+        <div class="tc-bar" style="height:${Math.max((day.revenue/max)*70,3)}px"></div>
+        <div class="tc-lbl">${day.day.slice(5)}</div>
+      </div>`).join('');
+    // Day by day table
+    document.getElementById('day-by-day').innerHTML = `
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Day by Day</div>
+        ${d.daily.map(day=>{
+          const pctD = Math.round((day.revenue/d.baseline)*100);
+          return `<div class="day-row">
+            <div style="min-width:80px;font-size:12px;font-weight:600">${new Date(day.day+'T00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}</div>
+            <div class="day-bar-wrap"><div class="day-bar-track"><div class="day-bar-fill" style="width:${Math.min(pctD,100)}%;background:${pctD>=100?'var(--green)':pctD>=60?'var(--accent)':'var(--yellow)'}"></div></div></div>
+            <div style="min-width:90px;text-align:right;font-family:'Plus Jakarta Sans';font-size:12px;font-weight:700">${C}${Math.round(day.revenue)}</div>
+            <div style="min-width:40px;text-align:right;font-size:11px;color:var(--text3)">${day.orders}x</div>
+          </div>`;}).join('')}
+      </div>`;
+  }
+
+  renderPayTable(d.payment_breakdown, rev + (d.due_collected_total||0), d.due_collected_total);
+  renderItemsTable(d.top_items);
+}
+
+function renderPayTable(breakdown, total, dueCollected) {
+  const icons = {cash:'💵 Cash',upi:'📱 UPI',card:'💳 Card',due:'💸 Due'};
+  // Total Cash In = sum of all merged buckets (already includes orders paid in full + due payments received)
+  const cashIn = (breakdown||[]).reduce((s,p)=>s+Number(p.amount||0),0);
+  const due = Number(dueCollected||0);
+  const fromOrders = Math.max(0, cashIn - due);
+  document.getElementById('cashflow-total').textContent = C+Math.round(cashIn).toLocaleString('en-IN');
+  document.getElementById('cashflow-split').textContent = `${C}${Math.round(fromOrders).toLocaleString('en-IN')} + ${C}${Math.round(due).toLocaleString('en-IN')}`;
+  // Use cashIn as the share denominator so percentages reflect the actual mix of money received
+  const denom = cashIn || total || 0;
+  document.getElementById('pay-tbl').innerHTML =
+    '<tr><th>Method</th><th>Txns</th><th>Amount</th><th>Share</th></tr>' +
+    (breakdown.length ? breakdown.map(p=>`<tr>
+      <td>${icons[p.payment_method]||p.payment_method||'Other'}</td>
+      <td class="mono">${p.count}</td>
+      <td class="mono">${C}${Math.round(p.amount)}</td>
+      <td><div style="display:flex;align-items:center;gap:6px">
+        <div style="width:50px;height:5px;background:var(--surface3);border-radius:99px;overflow:hidden">
+          <div style="width:${denom>0?Math.round(p.amount/denom*100):0}%;height:100%;background:var(--accent)"></div>
+        </div>
+        <span style="font-size:11px;color:var(--text2)">${denom>0?Math.round(p.amount/denom*100):0}%</span>
+      </div></td>
+    </tr>`).join('') : '<tr><td colspan="4" style="color:var(--text3)">No payments received</td></tr>');
+}
+
+function renderItemsTable(items) {
+  document.getElementById('items-tbl').innerHTML =
+    '<tr><th>#</th><th>Item</th><th>Qty</th><th>Revenue</th></tr>' +
+    (items.length ? items.map((i,idx)=>`<tr>
+      <td style="color:var(--text3)">${idx+1}</td>
+      <td style="font-weight:600">${i.item_name}</td>
+      <td class="mono">${i.qty}</td>
+      <td class="mono">${C}${Math.round(i.revenue)}</td>
+    </tr>`).join('') : '<tr><td colspan="4" style="color:var(--text3)">No data</td></tr>');
+}
+
+function exportCSV() {
+  let p = curPeriod;
+  if (p === 'today') window.open(`/api/reports/export?period=today&start=${curDate}&end=${curDate}`);
+  else if (p === 'custom') {
+    const s=document.getElementById('r-start').value, e=document.getElementById('r-end').value;
+    window.open(`/api/reports/export?period=custom&start=${s}&end=${e}`);
+  } else window.open(`/api/reports/export?period=${p}`);
+}
+
+function OM(id){document.getElementById(id).classList.add('show');}
+function CM(id){document.getElementById(id).classList.remove('show');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');}));
+
+async function addExpense(){
+  const desc=document.getElementById('exp-desc').value.trim();
+  const amt=parseFloat(document.getElementById('exp-amt').value);
+  if(!desc||!amt){toast('Fill all fields','error');return;}
+  const r=await fetch('/api/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({description:desc,amount:amt,category:document.getElementById('exp-cat').value})});
+  const d=await r.json().catch(()=>({}));
+  if(d && d.ok===false){toast(d.error||'Error saving','error');return;}
+  document.getElementById('exp-desc').value='';
+  document.getElementById('exp-amt').value='';
+  CM('exp-modal');
+  toast('Expense recorded ✓');
+  loadData();  // refresh report so the new expense + Net Profit update immediately
+}
+
+loadData();
+</script>
+{% endblock %}

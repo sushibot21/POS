@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+{% block title %}Menu{% endblock %}
+{% block head %}
+<style>
+.menu-pg{padding:20px;max-width:1300px;margin:0 auto;}
+.menu-layout{display:grid;grid-template-columns:210px 1fr;gap:14px;}
+@media(max-width:700px){.menu-layout{grid-template-columns:1fr;}}
+.cat-sidebar{display:flex;flex-direction:column;gap:6px;}
+.cat-item{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:var(--radius-sm);background:var(--surface);border:1.5px solid var(--border);cursor:pointer;transition:all 0.15s;box-shadow:var(--shadow-sm);}
+.cat-item:hover{border-color:var(--border2);}
+.cat-item.active{border-color:var(--accent);background:var(--accent-light);}
+.cat-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.cat-del{width:18px;height:18px;border-radius:50%;background:var(--red-bg);border:1px solid #fca5a5;color:var(--red);font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-left:4px;}
+.cat-item:hover .cat-del{display:flex;}
+.items-panel{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);}
+.it{width:100%;border-collapse:collapse;font-size:13px;}
+.it th{text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.3px;border-bottom:1.5px solid var(--border);}
+.it td{padding:10px;border-bottom:1px solid var(--surface3);vertical-align:top;}
+.it tr:hover td{background:var(--surface2);}
+.it tr:last-child td{border-bottom:none;}
+/* Modal sections */
+.modal-section{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:14px;}
+.modal-section-title{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.cust-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;}
+.portion-row{display:flex;gap:6px;align-items:center;margin-bottom:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;flex-wrap:wrap;}
+.remove-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:0 4px;line-height:1;transition:color 0.12s;flex-shrink:0;}
+.remove-btn:hover{color:var(--red);}
+.tag{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;font-size:10px;padding:1px 6px;color:var(--text2);margin:1px;}
+</style>
+{% endblock %}
+{% block content %}
+<div class="menu-pg">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px">Menu Manager</div>
+      <div style="font-size:13px;color:var(--text2)">Manage items, customizations and portions</div>
+    </div>
+    <button class="btn btn-primary" onclick="openAddItem()">+ Add Item</button>
+  </div>
+
+  <div class="menu-layout">
+    <!-- CATEGORIES -->
+    <div>
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Categories</div>
+      <div class="cat-sidebar" id="cat-side"></div>
+      <button class="btn btn-ghost" style="width:100%;margin-top:8px;justify-content:center" onclick="OM('cat-modal')">+ Add Category</button>
+    </div>
+
+    <!-- ITEMS -->
+    <div class="items-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:14px;font-weight:700" id="items-heading">All Items</div>
+        <div style="position:relative;width:200px">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px">🔍</span>
+          <input type="text" placeholder="Search..." style="padding-left:32px" oninput="filterI(this.value)">
+        </div>
+      </div>
+      <table class="it">
+        <thead><tr><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Customizations</th><th>Portions</th><th>Actions</th></tr></thead>
+        <tbody id="items-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ADD/EDIT ITEM MODAL -->
+<div class="modal-overlay" id="item-modal">
+  <div class="modal" style="min-width:580px;max-width:700px">
+    <div class="modal-header">
+      <div class="modal-title" id="item-modal-title">Add Menu Item</div>
+      <button class="modal-close" onclick="CM('item-modal')">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:78vh;padding-right:4px">
+      <input type="hidden" id="edit-id">
+
+      <!-- BASICS -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="grid-column:1/-1"><label>Item Name *</label><input type="text" id="i-name" placeholder="e.g. Paneer Tikka"></div>
+        <div><label>Price (₹) *</label><input type="number" id="i-price" placeholder="0" min="0"></div>
+        <div><label>Category *</label><select id="i-cat"></select></div>
+        <div><label>Stock Qty</label><input type="number" id="i-stock" placeholder="999" min="0"></div>
+        <div><label>Low Stock Alert at</label><input type="number" id="i-thresh" placeholder="10" min="0"></div>
+        <div style="grid-column:1/-1"><label>Description (optional)</label><input type="text" id="i-desc" placeholder="Short description"></div>
+      </div>
+
+      <!-- CUSTOMIZATIONS -->
+      <div class="modal-section">
+        <div class="modal-section-title">
+          Customizations
+          <button class="btn btn-ghost btn-sm" onclick="addCustRow()">+ Add</button>
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">e.g. "Spice Level" → Mild, Medium, Spicy</div>
+        <div id="cust-rows"></div>
+      </div>
+
+      <!-- PORTIONS FROM INVENTORY -->
+      <div class="modal-section">
+        <div class="modal-section-title">
+          Portions Used (Inventory)
+          <button class="btn btn-ghost btn-sm" onclick="addPortionRow()">+ Add</button>
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Link inventory items — stock auto-deducts when ordered. Supports decimals (e.g. 0.25 kg).</div>
+        <div id="portion-rows"></div>
+      </div>
+
+      <button class="btn btn-primary" style="justify-content:center" onclick="saveItem()">Save Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- CATEGORY MODAL -->
+<div class="modal-overlay" id="cat-modal">
+  <div class="modal" style="min-width:320px">
+    <div class="modal-header"><div class="modal-title">Add Category</div><button class="modal-close" onclick="CM('cat-modal')">✕</button></div>
+    <div style="display:grid;gap:12px">
+      <div><label>Category Name</label><input type="text" id="c-name" placeholder="e.g. Starters"></div>
+      <div><label>Color</label><input type="color" id="c-color" value="#f59e0b" style="height:38px;padding:2px 4px"></div>
+      <button class="btn btn-primary" style="justify-content:center" onclick="saveCat()">Add Category</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const C='{{ settings.currency }}';
+let allI=[], allC=[], allInv=[], selCatF='all', sq='';
+
+async function load(){
+  const [menuR, invR] = await Promise.all([fetch('/api/menu'), fetch('/api/inventory')]);
+  const menuD = await menuR.json();
+  allI = menuD.items; allC = menuD.categories;
+  allInv = await invR.json();
+  renderCats(); renderItems(); populateSel();
+}
+
+function renderCats(){
+  document.getElementById('cat-side').innerHTML =
+    `<div class="cat-item ${selCatF==='all'?'active':''}" onclick="SCF('all')">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="cat-dot" style="background:var(--accent)"></div>
+        <span style="font-size:13px;font-weight:600">All Items</span>
+      </div>
+      <span class="badge badge-orange">${allI.length}</span>
+    </div>` +
+    allC.map(c => `
+    <div class="cat-item ${selCatF===String(c.id)?'active':''}" onclick="SCF('${c.id}')">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+        <div class="cat-dot" style="background:${c.color}"></div>
+        <span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</span>
+      </div>
+      <span class="badge" style="background:${c.color}22;color:${c.color};flex-shrink:0">${allI.filter(i=>i.category_id===c.id).length}</span>
+      <div class="cat-del" onclick="event.stopPropagation();delCat(${c.id},'${c.name.replace(/'/g,"\\'")}')">✕</div>
+    </div>`).join('');
+}
+
+function SCF(id){ selCatF=id; renderCats(); renderItems(); }
+function filterI(q){ sq=q; renderItems(); }
+
+function renderItems(){
+  let items = allI;
+  if(selCatF !== 'all') items = items.filter(i => String(i.category_id) === selCatF);
+  if(sq) items = items.filter(i => i.name.toLowerCase().includes(sq.toLowerCase()));
+  const heading = selCatF === 'all' ? 'All' : (allC.find(c=>String(c.id)===selCatF)?.name||'');
+  document.getElementById('items-heading').textContent = `${heading} Items (${items.length})`;
+  document.getElementById('items-tbody').innerHTML = items.map(i => `
+    <tr>
+      <td><div style="font-weight:600">${i.name}</div>${i.description?`<div style="font-size:11px;color:var(--text3)">${i.description}</div>`:''}</td>
+      <td><span class="badge" style="background:${i.cat_color}22;color:${i.cat_color}">${i.cat_name||'—'}</span></td>
+      <td class="mono" style="font-weight:700">${C}${i.price}</td>
+      <td class="mono" style="color:${i.stock<=i.low_stock_threshold?'var(--red)':'var(--text)'};">${i.stock}</td>
+      <td style="max-width:120px">${(i.customizations||[]).map(c=>`<span class="tag">${c.name}</span>`).join('')||'<span style="color:var(--text3);font-size:11px">None</span>'}</td>
+      <td style="max-width:130px">${(i.portions||[]).map(p=>`<span class="tag">${p.inv_name} ×${p.qty_used}${p.unit}</span>`).join('')||'<span style="color:var(--text3);font-size:11px">None</span>'}</td>
+      <td>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-ghost btn-sm" onclick="editItem(${i.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="delItem(${i.id},'${i.name.replace(/'/g,"\\'")}')">Del</button>
+        </div>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="7" style="color:var(--text3);text-align:center;padding:20px">No items</td></tr>';
+}
+
+function populateSel(){
+  document.getElementById('i-cat').innerHTML = allC.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+// ── OPEN ADD ITEM ─────────────────────────────────────────────────────────────
+function openAddItem(){
+  document.getElementById('edit-id').value = '';
+  document.getElementById('i-name').value = '';
+  document.getElementById('i-price').value = '';
+  document.getElementById('i-stock').value = '999';
+  document.getElementById('i-thresh').value = '10';
+  document.getElementById('i-desc').value = '';
+  if(allC.length) document.getElementById('i-cat').value = allC[0].id;
+  document.getElementById('cust-rows').innerHTML = '';
+  document.getElementById('portion-rows').innerHTML = '';
+  document.getElementById('item-modal-title').textContent = 'Add Menu Item';
+  OM('item-modal');
+}
+
+// ── EDIT ITEM (pre-populate) ──────────────────────────────────────────────────
+async function editItem(id){
+  const r = await fetch(`/api/menu/item/${id}`);
+  const item = await r.json();
+  document.getElementById('edit-id').value = id;
+  document.getElementById('i-name').value = item.name;
+  document.getElementById('i-price').value = item.price;
+  document.getElementById('i-stock').value = item.stock;
+  document.getElementById('i-thresh').value = item.low_stock_threshold;
+  document.getElementById('i-desc').value = item.description || '';
+  document.getElementById('i-cat').value = item.category_id;
+  document.getElementById('item-modal-title').textContent = 'Edit Item';
+  // Customizations
+  document.getElementById('cust-rows').innerHTML = '';
+  (item.customizations||[]).forEach(c => addCustRow(c.name, c.options, c.is_required));
+  // Portions
+  document.getElementById('portion-rows').innerHTML = '';
+  (item.portions||[]).forEach(p => addPortionRow(p.inventory_id, p.qty_used, p.unit||''));
+  OM('item-modal');
+}
+
+// ── CUSTOMIZATION ROWS ────────────────────────────────────────────────────────
+function addCustRow(name='', options='', required=false){
+  const div = document.createElement('div');
+  div.className = 'cust-row';
+  div.innerHTML = `
+    <div style="flex:1">
+      <input type="text" placeholder="Name (e.g. Spice Level)" value="${name}" class="cust-name" style="margin-bottom:6px;font-size:12px">
+      <input type="text" placeholder="Options comma-separated (e.g. Mild, Medium, Spicy)" value="${options}" class="cust-opts" style="font-size:12px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0">
+      <label style="font-size:10px;color:var(--text3);margin-bottom:0">Req.</label>
+      <input type="checkbox" ${required?'checked':''} class="cust-req" style="width:16px;height:16px">
+    </div>
+    <button class="remove-btn" onclick="this.closest('.cust-row').remove()">✕</button>`;
+  document.getElementById('cust-rows').appendChild(div);
+}
+
+// ── PORTION ROWS (with unit selector + decimal support) ───────────────────────
+function addPortionRow(selInvId=null, qty=1, portionUnit=''){
+  const div = document.createElement('div');
+  div.className = 'portion-row';
+  // Build inventory options
+  const invOpts = allInv.length
+    ? allInv.map(inv => `<option value="${inv.id}" data-unit="${inv.unit}" ${String(inv.id)===String(selInvId)?'selected':''}>${inv.name} (${inv.unit})</option>`).join('')
+    : '<option value="">No inventory items yet — add in Inventory tab</option>';
+
+  // Unit options for the portion (independent of inventory unit — user can specify e.g. 250 gm from a kg item)
+  const unitOpts = ['kg','gm','litre','ml','unit','dozen','packet','bottle','box'].map(u =>
+    `<option value="${u}" ${(portionUnit||'unit')===u?'selected':''}>${u}</option>`).join('');
+
+  div.innerHTML = `
+    <select class="p-inv" style="flex:2;font-size:12px" onchange="updatePortionUnit(this)">${invOpts}</select>
+    <input type="number" placeholder="Qty" value="${qty}" min="0.001" step="0.001" class="p-qty" style="width:80px;font-size:12px">
+    <select class="p-unit" style="width:70px;font-size:12px">${unitOpts}</select>
+    <button class="remove-btn" onclick="this.closest('.portion-row').remove()">✕</button>`;
+
+  // Set unit from inventory item on first load
+  div.querySelector('.p-inv').addEventListener('change', function(){
+    const opt = this.options[this.selectedIndex];
+    const invUnit = opt?.dataset?.unit || '';
+    if(invUnit) div.querySelector('.p-unit').value = invUnit;
+  });
+
+  document.getElementById('portion-rows').appendChild(div);
+}
+
+function updatePortionUnit(select){
+  const opt = select.options[select.selectedIndex];
+  const invUnit = opt?.dataset?.unit || '';
+  if(invUnit){
+    const row = select.closest('.portion-row');
+    if(row) row.querySelector('.p-unit').value = invUnit;
+  }
+}
+
+// ── SAVE ITEM ─────────────────────────────────────────────────────────────────
+async function saveItem(){
+  const name = document.getElementById('i-name').value.trim();
+  const price = parseFloat(document.getElementById('i-price').value);
+  if(!name || !price){ toast('Name and price are required','error'); return; }
+
+  const customizations = [...document.querySelectorAll('.cust-row')].map(row => ({
+    name: row.querySelector('.cust-name').value.trim(),
+    options: row.querySelector('.cust-opts').value.trim(),
+    required: row.querySelector('.cust-req').checked
+  })).filter(c => c.name && c.options);
+
+  const portions = [...document.querySelectorAll('.portion-row')].map(row => ({
+    inventory_id: parseInt(row.querySelector('.p-inv').value),
+    qty_used: parseFloat(row.querySelector('.p-qty').value) || 1,
+    unit: row.querySelector('.p-unit').value || 'unit'
+  })).filter(p => p.inventory_id && !isNaN(p.inventory_id));
+
+  const data = {
+    name, price,
+    category_id: parseInt(document.getElementById('i-cat').value),
+    stock: parseInt(document.getElementById('i-stock').value) || 999,
+    threshold: parseInt(document.getElementById('i-thresh').value) || 10,
+    description: document.getElementById('i-desc').value.trim(),
+    customizations, portions
+  };
+
+  const id = document.getElementById('edit-id').value;
+  const r = await fetch(id ? `/api/menu/item/${id}` : '/api/menu/item', {
+    method: id ? 'PUT' : 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  });
+  const resp = await r.json();
+  if(resp.ok){ CM('item-modal'); toast(id ? 'Item updated' : 'Item added'); load(); }
+  else toast(resp.error||'Error saving','error');
+}
+
+async function delItem(id, name){
+  if(!confirm(`Delete "${name}"?`)) return;
+  await fetch(`/api/menu/item/${id}`, {method:'DELETE'});
+  toast('Item removed'); await load();
+}
+
+// ── CATEGORIES ────────────────────────────────────────────────────────────────
+async function saveCat(){
+  const name = document.getElementById('c-name').value.trim();
+  if(!name){ toast('Enter category name','error'); return; }
+  await fetch('/api/categories', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, color:document.getElementById('c-color').value})});
+  CM('cat-modal');
+  document.getElementById('c-name').value = '';
+  toast('Category added'); await load();
+}
+
+async function delCat(id, name){
+  const itemCount = allI.filter(i => i.category_id === id).length;
+  const msg = itemCount > 0
+    ? `Delete category "${name}"? ${itemCount} item(s) will become uncategorized.`
+    : `Delete category "${name}"?`;
+  if(!confirm(msg)) return;
+  await fetch(`/api/categories/${id}`, {method:'DELETE'});
+  if(selCatF === String(id)) selCatF = 'all';
+  toast('Category deleted'); await load();
+}
+
+function OM(id){ document.getElementById(id).classList.add('show'); }
+function CM(id){ document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('show'); }));
+function onRealtimeUpdate(d){
+  if(d.type==='menu_updated') load();
+}
+load();
+</script>
+{% endblock %}

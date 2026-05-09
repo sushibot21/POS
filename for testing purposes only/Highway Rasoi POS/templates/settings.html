@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block head %}
+<style>
+.settings-wrap{padding:20px;max-width:720px;margin:0 auto;}
+.s-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:14px;box-shadow:var(--shadow);}
+.s-card-title{font-size:14px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.upload-area{border:2px dashed var(--border2);border-radius:var(--radius-sm);padding:18px;text-align:center;cursor:pointer;transition:all 0.15s;position:relative;overflow:hidden;}
+.upload-area:hover{border-color:var(--accent);background:var(--accent-light);}
+.upload-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-preview{width:72px;height:72px;border-radius:10px;object-fit:cover;border:2px solid var(--border);display:block;margin:0 auto 8px;}
+.upload-preview.circle{border-radius:50%;}
+.upload-label{font-size:12px;font-weight:600;color:var(--text2);}
+.upload-hint{font-size:11px;color:var(--text3);margin-top:3px;}
+.upload-icon{font-size:32px;margin-bottom:6px;}
+</style>
+{% endblock %}
+{% block content %}
+<div class="settings-wrap">
+  <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px;margin-bottom:6px">Settings</div>
+  <div style="font-size:13px;color:var(--text2);margin-bottom:20px">Configure your restaurant</div>
+
+  <!-- RESTAURANT INFO -->
+  <div class="s-card">
+    <div class="s-card-title">🏪 Restaurant Info</div>
+    <div style="display:grid;gap:12px">
+      <div><label>Restaurant Name</label><input type="text" id="s-name" value="{{ settings.restaurant_name }}"></div>
+      <div class="grid2">
+        <div><label>Currency Symbol</label><input type="text" id="s-cur" value="{{ settings.currency }}"></div>
+        <div><label>Tax / GST Rate (%)</label><input type="number" id="s-tax" value="{{ settings.tax_rate }}" min="0" max="100"></div>
+      </div>
+      <div>
+        <label>GSTIN Number <span style="font-weight:400;color:var(--text3)">(printed on bills)</span></label>
+        <input type="text" id="s-gstin" value="{{ settings.gstin or '' }}" placeholder="e.g. 27AABCU9603R1ZX" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+      </div>
+    </div>
+  </div>
+
+  <!-- BRANDING -->
+  <div class="s-card">
+    <div class="s-card-title">🎨 Branding & Profile</div>
+    <div class="grid2">
+      <!-- LOGO -->
+      <div>
+        <label style="margin-bottom:8px">Restaurant Logo</label>
+        <div class="upload-area">
+          <input type="file" id="logo-file" accept="image/*" onchange="uploadFile(this,'logo')">
+          {% if settings.logo_url %}
+            <img src="{{ settings.logo_url }}" class="upload-preview" id="logo-preview">
+          {% else %}
+            <div class="upload-icon" id="logo-icon">🏪</div>
+            <img src="" class="upload-preview" id="logo-preview" style="display:none">
+          {% endif %}
+          <div class="upload-label">Click to upload logo</div>
+          <div class="upload-hint">PNG, JPG · max 5MB</div>
+        </div>
+      </div>
+      <!-- PROFILE PIC -->
+      <div>
+        <label style="margin-bottom:8px">Profile / Owner Photo</label>
+        <div class="upload-area">
+          <input type="file" id="profile-file" accept="image/*" onchange="uploadFile(this,'profile_pic')">
+          {% if settings.profile_pic_url %}
+            <img src="{{ settings.profile_pic_url }}" class="upload-preview circle" id="profile-preview">
+          {% else %}
+            <div class="upload-icon" id="profile-icon">👤</div>
+            <img src="" class="upload-preview circle" id="profile-preview" style="display:none">
+          {% endif %}
+          <div class="upload-label">Click to upload photo</div>
+          <div class="upload-hint">PNG, JPG · max 5MB</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYMENT & QR -->
+  <div class="s-card">
+    <div class="s-card-title">💳 Payment & QR Code</div>
+    <div style="display:grid;gap:14px">
+      <div><label>UPI ID (shown on bill)</label><input type="text" id="s-upi" value="{{ settings.upi_id }}" placeholder="restaurant@upi"></div>
+      <div>
+        <label style="margin-bottom:8px">UPI QR Code <span style="font-weight:400;color:var(--text3)">(printed on every bill)</span></label>
+        <div style="display:flex;gap:14px;align-items:flex-start">
+          <div class="upload-area" style="width:150px;flex-shrink:0">
+            <input type="file" id="qr-file" accept="image/*" onchange="uploadFile(this,'upi_qr')">
+            {% if settings.upi_qr_url %}
+              <img src="{{ settings.upi_qr_url }}" class="upload-preview" id="qr-preview" style="width:72px;height:72px">
+            {% else %}
+              <div class="upload-icon" id="qr-icon">📱</div>
+              <img src="" class="upload-preview" id="qr-preview" style="display:none;width:72px;height:72px">
+            {% endif %}
+            <div class="upload-label">Upload QR</div>
+          </div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.8;padding-top:6px">
+            Upload your UPI QR code image. It will print on every bill so customers can scan and pay.<br><br>
+            <strong style="color:var(--text)">Tip:</strong> Download your QR from GPay, PhonePe, or Paytm Business.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERFORMANCE -->
+  <div class="s-card">
+    <div class="s-card-title">🎯 Performance Target</div>
+    <div><label>Daily Sales Baseline ({{ settings.currency }})</label><input type="number" id="s-base" value="{{ settings.baseline_daily_sales }}" placeholder="5000"></div>
+    <div style="font-size:12px;color:var(--text2);margin-top:6px">Used to calculate daily performance % in dashboard and reports</div>
+  </div>
+
+  <button class="btn btn-primary btn-lg" onclick="save()" style="width:100%;justify-content:center;margin-bottom:16px">Save Settings</button>
+
+  <!-- GOOGLE DRIVE SYNC -->
+  <div class="s-card" style="border-color:#93c5fd">
+    <div class="s-card-title">☁️ Google Drive Backup (Cloud Sync)</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.8">
+      Your data is stored locally at <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px">data/pos.db</code>. 
+      Link a Google Drive folder to automatically back up this file and prevent data loss.
+    </div>
+    <div style="display:grid;gap:12px">
+      <div>
+        <label>Google Drive Folder Link <span style="font-weight:400;color:var(--text3)">(shared folder URL)</span></label>
+        <input type="text" id="s-gdrive" value="{{ settings.google_drive_link or '' }}" placeholder="https://drive.google.com/drive/folders/...">
+        <div style="font-size:11px;color:var(--text2);margin-top:5px;line-height:1.7">
+          <strong style="color:var(--text)">How to set up:</strong><br>
+          1. Create a folder in Google Drive and share it<br>
+          2. Paste the folder link above<br>
+          3. Use <strong>Google Drive for Desktop</strong> app — it syncs a local folder to Drive automatically<br>
+          4. Point the POS <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">data/</code> folder to sync with that Drive folder
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:var(--radius-sm);padding:12px">
+        <input type="checkbox" id="s-sync" style="width:16px;height:16px;flex-shrink:0" {% if settings.google_sync_enabled == '1' %}checked{% endif %}>
+        <label for="s-sync" style="margin:0;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;color:var(--text)">Enable Google Drive sync reminder</label>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="width:fit-content" onclick="saveGDrive()">Save Drive Settings</button>
+    </div>
+    <div style="margin-top:14px;background:var(--blue-bg);border:1px solid #bfdbfe;border-radius:var(--radius-sm);padding:12px;font-size:12px;color:var(--blue);line-height:1.8">
+      <strong>📥 Recommended free tools:</strong><br>
+      • <a href="https://www.google.com/drive/download/" target="_blank" style="color:var(--blue)">Google Drive for Desktop</a> — syncs automatically<br>
+      • <a href="https://rclone.org" target="_blank" style="color:var(--blue)">rclone</a> — command-line sync for advanced users<br>
+      • Manual: Copy <code>data/pos.db</code> to Drive periodically
+    </div>
+  </div>
+
+  <!-- REMOTE ACCESS -->
+  <div class="s-card">
+    <div class="s-card-title">📱 Remote Access</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.9">
+      <strong style="color:var(--text)">Same Wi-Fi:</strong> <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px">http://[PC-IP]:5003</code><br>
+      <strong style="color:var(--text)">Find your IP:</strong> Run <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px">ipconfig</code> (Windows) or <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px">ifconfig</code> (Mac)<br>
+      <strong style="color:var(--text)">From anywhere:</strong> Use <a href="https://ngrok.com" target="_blank" style="color:var(--accent)">ngrok</a> — run <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px">ngrok http 5003</code> and share the URL
+    </div>
+  </div>
+
+  <!-- SWIGGY/ZOMATO -->
+  <div class="s-card" style="border-color:#fde68a">
+    <div class="s-card-title">🛵 Swiggy & Zomato</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.7">
+      Apply at <a href="https://partner.swiggy.com" target="_blank" style="color:var(--accent)">partner.swiggy.com</a> or
+      <a href="https://www.zomato.com/business" target="_blank" style="color:var(--accent)">zomato.com/business</a> for Partner API access.
+    </div>
+    <div style="display:grid;gap:10px">
+      <div><label>Swiggy Webhook Secret</label><input type="text" id="s-swiggy" value="{{ settings.swiggy_secret or '' }}" placeholder="From Swiggy Partner dashboard"></div>
+      <div><label>Zomato API Key</label><input type="text" id="s-zomato" value="{{ settings.zomato_key or '' }}" placeholder="From Zomato for Business"></div>
+      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:9px 12px;font-size:12px;color:var(--text2)">
+        Your webhook URL: <code style="font-size:11px">http://[YOUR-IP]:5003/api/webhook/orders</code>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="saveIntegration()" style="width:fit-content">Save Integration Keys</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function uploadFile(input, field) {
+  const file = input.files[0]; if(!file) return;
+  const form = new FormData();
+  form.append('file', file); form.append('field', field);
+  const r = await fetch('/api/upload', {method:'POST', body:form});
+  const d = await r.json();
+  if(d.ok) {
+    const ids = {logo:['logo-preview','logo-icon'], profile_pic:['profile-preview','profile-icon'], upi_qr:['qr-preview','qr-icon']};
+    const [previewId, iconId] = ids[field] || [];
+    if(previewId) {
+      const img = document.getElementById(previewId);
+      img.src = d.url + '?t=' + Date.now(); img.style.display = '';
+      const icon = document.getElementById(iconId);
+      if(icon) icon.style.display = 'none';
+    }
+    toast('Uploaded ✓');
+  } else toast(d.error || 'Upload failed', 'error');
+}
+
+async function save() {
+  const data = {
+    restaurant_name: document.getElementById('s-name').value,
+    currency: document.getElementById('s-cur').value,
+    tax_rate: document.getElementById('s-tax').value,
+    gstin: document.getElementById('s-gstin').value.trim(),
+    baseline_daily_sales: document.getElementById('s-base').value,
+    upi_id: document.getElementById('s-upi').value,
+  };
+  await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  toast('Settings saved — refresh pages to apply');
+}
+
+async function saveGDrive() {
+  const data = {
+    google_drive_link: document.getElementById('s-gdrive').value.trim(),
+    google_sync_enabled: document.getElementById('s-sync').checked ? '1' : '0',
+  };
+  await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  toast('Drive settings saved');
+}
+
+async function saveIntegration() {
+  const data = {
+    swiggy_secret: document.getElementById('s-swiggy').value.trim(),
+    zomato_key: document.getElementById('s-zomato').value.trim(),
+  };
+  await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  toast('Integration keys saved');
+}
+
+async function manualBackup() {
+  // Download today's and last 30 days CSV as a backup
+  const status = document.getElementById('gdrive-status');
+  if(status) { status.textContent = 'Preparing backup...'; }
+  window.open('/api/reports/export?period=30d');
+  if(status) { setTimeout(()=>{ status.textContent = '✓ Downloaded! Upload to your Drive folder.'; }, 1000); }
+}
+async function saveGDrive() {
+  const link = document.getElementById('s-gdrive') ? document.getElementById('s-gdrive').value.trim() : '';
+  await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({google_drive_link: link, google_sync_enabled: link ? '1' : '0'})});
+  toast(link ? 'Drive link saved. Use "Manual Backup Now" to download and upload to Drive.' : 'Drive sync disabled');
+}
+</script>
+{% endblock %}

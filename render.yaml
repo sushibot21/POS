@@ -1,0 +1,43 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy this app from a GitHub repo by clicking
+# "New +" -> "Blueprint" in the Render dashboard and pointing it at the repo.
+#
+# IMPORTANT: this Blueprint declares a 1 GB persistent disk. Persistent disks
+# are a paid add-on (~$1/mo) — the rest of the service runs on Render's free
+# tier. Without the disk, the SQLite database and uploaded images are wiped
+# on every redeploy.
+
+services:
+  - type: web
+    name: pos-system
+    runtime: python
+    plan: free
+    branch: main
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --worker-class eventlet --workers 1 --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /login
+    disk:
+      name: pos-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SOCKETIO_ASYNC_MODE
+        value: eventlet
+      - key: DB_PATH
+        value: /var/data/pos.db
+      - key: UPLOAD_FOLDER
+        value: /var/data/uploads
+      - key: UPLOAD_URL_PREFIX
+        value: /uploads
+      # Secrets — set fresh values in the Render dashboard before first deploy.
+      # `sync: false` means Render will not read these from the Blueprint and
+      # will instead prompt you for the value during setup.
+      - key: SECRET_KEY
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: ADMIN_PASS
+        sync: false

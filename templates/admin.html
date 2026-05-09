@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus Jakarta Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#0d0d0d;color:#f0f0f0;min-height:100vh;}
+nav{background:#161616;border-bottom:1px solid #2a2a2a;padding:0 20px;display:flex;align-items:center;height:54px;gap:12px;}
+.nav-brand{font-size:15px;font-weight:800;color:#2563eb;display:flex;align-items:center;gap:8px;}
+.nav-logo{width:30px;height:30px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+.nav-badge{background:rgba(37,99,235,0.15);color:#2563eb;border:1px solid rgba(37,99,235,0.3);font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;}
+.spacer{flex:1}
+.pos-tab{padding:8px 14px;font-size:13px;font-weight:600;color:#6b6460;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;}
+.pos-tab.active{color:#2563eb;border-bottom-color:#2563eb;}
+.btn-sm{padding:6px 14px;border-radius:7px;font-family:'Plus Jakarta Sans';font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all 0.15s;}
+.btn-primary{background:#2563eb;color:white;box-shadow:0 2px 8px rgba(37,99,235,0.25);}
+.btn-primary:hover{background:#3b82f6;}
+.btn-ghost{background:#1f1f1f;color:#a0a0a0;border:1px solid #2a2a2a;}
+.btn-ghost:hover{color:#f0f0f0;border-color:#404040;}
+.btn-danger{background:rgba(220,38,38,0.15);color:#f87171;border:1px solid rgba(220,38,38,0.3);}
+.btn-danger:hover{background:rgba(220,38,38,0.25);}
+.wrap{padding:22px;max-width:1200px;margin:0 auto;}
+.page-title{font-size:22px;font-weight:800;letter-spacing:-0.5px;margin-bottom:2px;}
+.page-sub{font-size:13px;color:#6b6460;margin-bottom:20px;}
+.card{background:#161616;border:1.5px solid #2a2a2a;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 3px 10px rgba(0,0,0,0.3);}
+.card-title{font-size:12px;font-weight:700;color:#a0a0a0;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:#6b6460;text-transform:uppercase;letter-spacing:0.3px;border-bottom:1px solid #2a2a2a;}
+td{padding:10px;border-bottom:1px solid #1f1f1f;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#1a1a1a;}
+.mono{font-family:'Plus Jakarta Sans';}
+.badge-active{background:rgba(13,158,88,0.12);color:#4ade80;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;}
+.badge-inactive{background:rgba(220,38,38,0.12);color:#f87171;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;}
+input,select{background:#1f1f1f;border:1.5px solid #2a2a2a;color:#f0f0f0;border-radius:8px;padding:9px 12px;font-family:'Plus Jakarta Sans';font-size:13px;outline:none;width:100%;transition:all 0.15s;}
+input:focus,select:focus{border-color:#2563eb;}
+label{font-size:11px;font-weight:600;color:#6b6460;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.3px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.modal-overlay.show{opacity:1;pointer-events:all;}
+.modal{background:#161616;border:1.5px solid #2a2a2a;border-radius:16px;padding:26px;min-width:420px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.5);transform:scale(0.96);transition:transform 0.2s;}
+.modal-overlay.show .modal{transform:scale(1);}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.modal-title{font-size:15px;font-weight:700;}
+.modal-close{background:#1f1f1f;border:1px solid #2a2a2a;color:#a0a0a0;cursor:pointer;width:28px;height:28px;border-radius:50%;font-size:13px;display:flex;align-items:center;justify-content:center;}
+.modal-close:hover{color:#f87171;}
+.btn-full{width:100%;padding:11px;border-radius:8px;font-family:'Plus Jakarta Sans';font-size:13px;font-weight:700;border:none;cursor:pointer;background:#2563eb;color:white;margin-top:4px;}
+.btn-full:hover{background:#3b82f6;}
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+.toast{background:#1f1f1f;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:8px;animation:slideIn 0.25s ease;}
+.toast.success{border-left:3px solid #4ade80;}
+.toast.error{border-left:3px solid #f87171;}
+@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+@media(max-width:700px){.stats-grid{grid-template-columns:1fr 1fr;}}
+.stat{background:#1f1f1f;border:1px solid #2a2a2a;border-radius:10px;padding:14px;text-align:center;}
+.stat-val{font-size:22px;font-weight:800;font-family:'Plus Jakarta Sans';}
+.stat-lbl{font-size:10px;color:#6b6460;margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;}
+.log-row{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #1a1a1a;font-size:12px;}
+.log-row:last-child{border-bottom:none;}
+.log-time{color:#404040;font-family:'Plus Jakarta Sans';white-space:nowrap;flex-shrink:0;min-width:130px;}
+.log-biller{color:#2563eb;font-weight:700;min-width:100px;flex-shrink:0;}
+.log-entity{background:#1f1f1f;color:#a0a0a0;padding:1px 7px;border-radius:4px;font-size:11px;flex-shrink:0;}
+.log-action{font-weight:600;color:#f0f0f0;}
+.log-detail{color:#6b6460;flex:1;}
+.entity-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;display:inline-block;}
+.e-order{background:rgba(37,99,235,0.15);color:#2563eb;}
+.e-menu{background:rgba(59,130,246,0.15);color:#60a5fa;}
+.e-inventory{background:rgba(13,158,88,0.15);color:#4ade80;}
+.e-customer{background:rgba(168,85,247,0.15);color:#c084fc;}
+.e-biller{background:rgba(234,179,8,0.15);color:#fbbf24;}
+.e-hotel{background:rgba(20,184,166,0.15);color:#2dd4bf;}
+.e-default{background:#2a2a2a;color:#a0a0a0;}
+.admin-creds-box{background:rgba(37,99,235,0.08);border:1px solid rgba(37,99,235,0.2);border-radius:10px;padding:13px 16px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.cred-item{font-size:12px;color:#93c5fd;}
+.cred-val{font-family:'Plus Jakarta Sans';font-size:13px;color:#dbeafe;background:rgba(37,99,235,0.1);padding:3px 9px;border-radius:5px;margin-left:6px;}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-brand"><div class="nav-logo">🔐</div>Admin Portal</div>
+  <div style="display:flex;gap:0;height:100%;align-items:flex-end">
+    <div class="pos-tab active" id="nav-billers" onclick="showSection('billers')">Billers</div>
+    <div class="pos-tab" id="nav-stats" onclick="showSection('stats')">Sales Stats</div>
+    <div class="pos-tab" id="nav-logs" onclick="showSection('logs')">Audit Logs</div>
+  </div>
+  <div class="spacer"></div>
+  <a href="/" style="color:#a0a0a0;text-decoration:none;font-size:12px;margin-right:6px">→ POS</a>
+  <button class="btn-sm btn-ghost" onclick="doLogout()">Logout</button>
+</nav>
+
+<div class="wrap">
+  <div class="page-title">Admin Portal</div>
+  <div class="page-sub">Manage billers, view activity logs and sales performance</div>
+
+  <div class="admin-creds-box">
+    <div class="cred-item">🔑 Admin ID: <span class="cred-val">{{ admin_id }}</span></div>
+    <div class="cred-item" style="font-size:11px;color:#6b6460">Keep these credentials private — do not share with billers</div>
+  </div>
+
+  <!-- BILLERS SECTION -->
+  <div id="section-billers">
+    <div class="card">
+      <div class="card-title">
+        Biller Accounts
+        <button class="btn-sm btn-primary" onclick="openAddBiller()">+ Add Biller</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Biller ID</th><th>Name</th><th>Status</th><th>Created</th><th>Orders Closed</th><th>Actions</th></tr></thead>
+          <tbody id="billers-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATS SECTION -->
+  <div id="section-stats" style="display:none">
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-val" style="color:#2563eb" id="st-total">₹0</div><div class="stat-lbl">All-time Revenue</div></div>
+      <div class="stat"><div class="stat-val" id="st-today">₹0</div><div class="stat-lbl">Today's Revenue</div></div>
+      <div class="stat"><div class="stat-val" id="st-month">₹0</div><div class="stat-lbl">This Month</div></div>
+      <div class="stat"><div class="stat-val" id="st-orders">0</div><div class="stat-lbl">Orders Today</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Biller Performance</div>
+      <table>
+        <thead><tr><th>Biller ID</th><th>Name</th><th>Status</th><th>Orders Closed</th><th>Total Actions</th><th>Activity</th></tr></thead>
+        <tbody id="biller-stats-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- LOGS SECTION -->
+  <div id="section-logs" style="display:none">
+    <div class="card">
+      <div class="card-title">
+        Audit Logs
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="log-entity" style="width:140px;padding:5px 8px;font-size:12px" onchange="loadLogs()">
+            <option value="">All entities</option>
+            <option value="order">Orders</option>
+            <option value="menu">Menu</option>
+            <option value="inventory">Inventory</option>
+            <option value="customer">Customers</option>
+            <option value="biller">Billers</option>
+            <option value="hotel_room">Hotel</option>
+          </select>
+          <select id="log-biller" style="width:140px;padding:5px 8px;font-size:12px" onchange="loadLogs()">
+            <option value="">All billers</option>
+          </select>
+          <button class="btn-sm btn-ghost" onclick="loadLogs()">↻ Refresh</button>
+        </div>
+      </div>
+      <div id="logs-container" style="max-height:65vh;overflow-y:auto">
+        <div style="text-align:center;color:#6b6460;padding:40px;font-size:13px">Loading logs...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD/EDIT BILLER MODAL -->
+<div class="modal-overlay" id="biller-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="biller-modal-title">Add Biller</div>
+      <button class="modal-close" onclick="CM('biller-modal')">✕</button>
+    </div>
+    <div style="display:grid;gap:12px">
+      <input type="hidden" id="edit-bid">
+      <div class="grid2">
+        <div>
+          <label>Biller ID</label>
+          <input type="text" id="b-id" placeholder="e.g. BILLER002" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+          <div id="b-id-hint" style="font-size:11px;color:#6b6460;margin-top:3px">Unique login ID for this biller</div>
+        </div>
+        <div><label>Full Name</label><input type="text" id="b-name" placeholder="Staff name"></div>
+      </div>
+      <div>
+        <label>Password <span id="b-pw-hint" style="font-weight:400;color:#6b6460;text-transform:none;letter-spacing:0">(leave blank to keep current)</span></label>
+        <input type="password" id="b-pw" placeholder="Min 6 characters">
+      </div>
+      <div id="b-status-row" style="display:none">
+        <label>Status</label>
+        <select id="b-status"><option value="1">Active</option><option value="0">Inactive (cannot login)</option></select>
+      </div>
+      <button class="btn-full" onclick="saveBiller()">Save Biller</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+const C = '₹';
+let allBillers = [];
+
+async function loadBillers(){
+  const r = await fetch('/api/admin/billers');
+  allBillers = await r.json();
+  // Populate biller filter in logs
+  document.getElementById('log-biller').innerHTML =
+    '<option value="">All billers</option>' +
+    allBillers.map(b => `<option value="${b.biller_id}">${b.biller_id} — ${b.name}</option>`).join('');
+  renderBillers();
+}
+
+function renderBillers(){
+  // Get order counts from stats if available
+  document.getElementById('billers-tbody').innerHTML = allBillers.map(b => `
+    <tr>
+      <td class="mono" style="font-weight:600">${b.biller_id}</td>
+      <td>${b.name}</td>
+      <td><span class="${b.is_active ? 'badge-active' : 'badge-inactive'}">${b.is_active ? 'Active' : 'Inactive'}</span></td>
+      <td style="color:#6b6460;font-size:11px">${(b.created_at||'').split(' ')[0]}</td>
+      <td class="mono" style="color:#a0a0a0" id="orders-${b.biller_id}">—</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sm btn-ghost" onclick="editBiller(${b.id},'${b.biller_id}','${b.name.replace(/'/g,"\\'")}',${b.is_active})">Edit</button>
+          <button class="btn-sm btn-danger" onclick="delBiller(${b.id},'${b.biller_id}')">Delete</button>
+        </div>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6460;text-align:center;padding:20px">No billers yet</td></tr>';
+}
+
+async function loadStats(){
+  const r = await fetch('/api/admin/stats');
+  const d = await r.json();
+  document.getElementById('st-total').textContent = C + Math.round(d.total_revenue).toLocaleString('en-IN');
+  document.getElementById('st-today').textContent = C + Math.round(d.today.t).toLocaleString('en-IN');
+  document.getElementById('st-month').textContent = C + Math.round(d.month.t).toLocaleString('en-IN');
+  document.getElementById('st-orders').textContent = d.today.c;
+
+  // Update orders column in billers table
+  d.biller_stats.forEach(b => {
+    const el = document.getElementById(`orders-${b.biller_id}`);
+    if(el) el.textContent = b.orders_closed;
+  });
+
+  document.getElementById('biller-stats-tbody').innerHTML = d.biller_stats.map(b => {
+    const maxActs = Math.max(...d.biller_stats.map(x => x.total_actions), 1);
+    const pct = Math.round((b.total_actions / maxActs) * 100);
+    return `<tr>
+      <td class="mono" style="font-weight:600">${b.biller_id}</td>
+      <td>${b.name}</td>
+      <td><span class="${b.is_active ? 'badge-active' : 'badge-inactive'}">${b.is_active ? 'Active' : 'Inactive'}</span></td>
+      <td class="mono" style="color:#2563eb;font-weight:700">${b.orders_closed}</td>
+      <td class="mono">${b.total_actions}</td>
+      <td style="min-width:120px">
+        <div style="height:6px;background:#2a2a2a;border-radius:99px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:#2563eb;border-radius:99px;transition:width 0.5s"></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="color:#6b6460;text-align:center;padding:20px">No activity yet</td></tr>';
+}
+
+async function loadLogs(){
+  const entity = document.getElementById('log-entity').value;
+  const biller = document.getElementById('log-biller').value;
+  const r = await fetch(`/api/admin/logs?entity=${entity}&biller=${biller}&limit=300`);
+  const logs = await r.json();
+  const entityColors = {order:'e-order',menu:'e-menu',inventory:'e-inventory',customer:'e-customer',biller:'e-biller',hotel_room:'e-hotel'};
+  const actionIcons = {close_order:'💰',add_menu_item:'🍽',update_inventory:'📦',add_customer:'👤',checkin:'🛏',checkout:'🚪',add_biller:'👤',edit_biller:'✏️',delete_biller:'🗑',add_inventory:'📦'};
+  if(!logs.length){
+    document.getElementById('logs-container').innerHTML = '<div style="text-align:center;color:#6b6460;padding:40px;font-size:13px">No logs yet. Activity will appear here as billers use the POS.</div>';
+    return;
+  }
+  document.getElementById('logs-container').innerHTML = logs.map(l => `
+    <div class="log-row">
+      <span class="log-time">${(l.created_at||'').replace('T',' ').slice(0,16)}</span>
+      <span class="log-biller">${l.biller_id||'system'}</span>
+      <span class="entity-badge ${entityColors[l.entity]||'e-default'}">${l.entity}</span>
+      <span class="log-action">${actionIcons[l.action]||'•'} ${l.action.replace(/_/g,' ')}</span>
+      <span class="log-detail">${l.detail||''}</span>
+    </div>`).join('');
+}
+
+function openAddBiller(){
+  document.getElementById('edit-bid').value = '';
+  document.getElementById('b-id').value = '';
+  document.getElementById('b-id').disabled = false;
+  document.getElementById('b-name').value = '';
+  document.getElementById('b-pw').value = '';
+  document.getElementById('b-pw-hint').textContent = '';
+  document.getElementById('b-status-row').style.display = 'none';
+  document.getElementById('biller-modal-title').textContent = 'Add Biller';
+  OM('biller-modal');
+}
+
+function editBiller(id, bid, name, isActive){
+  document.getElementById('edit-bid').value = id;
+  document.getElementById('b-id').value = bid;
+  document.getElementById('b-id').disabled = true;
+  document.getElementById('b-name').value = name;
+  document.getElementById('b-pw').value = '';
+  document.getElementById('b-pw-hint').textContent = '(leave blank to keep current)';
+  document.getElementById('b-status').value = isActive ? '1' : '0';
+  document.getElementById('b-status-row').style.display = '';
+  document.getElementById('biller-modal-title').textContent = 'Edit Biller';
+  OM('biller-modal');
+}
+
+async function saveBiller(){
+  const id = document.getElementById('edit-bid').value;
+  const bid = document.getElementById('b-id').value.trim().toUpperCase();
+  const name = document.getElementById('b-name').value.trim();
+  const pw = document.getElementById('b-pw').value;
+  if(!name){ toast('Enter biller name','error'); return; }
+  if(!id && !pw){ toast('Password required for new biller','error'); return; }
+  if(pw && pw.length < 6){ toast('Password must be at least 6 characters','error'); return; }
+
+  const data = { biller_id: bid, name, is_active: parseInt(document.getElementById('b-status').value || '1') };
+  if(pw) data.password = pw;
+
+  const url = id ? `/api/admin/billers/${id}` : '/api/admin/billers';
+  const method = id ? 'PUT' : 'POST';
+  const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+  const resp = await r.json();
+
+  if(resp.ok){
+    CM('biller-modal');
+    toast(id ? `Biller "${name}" updated` : `Biller "${bid}" added`);
+    await loadBillers();
+    await loadStats();
+  } else {
+    toast(resp.error || 'Error saving biller', 'error');
+  }
+}
+
+async function delBiller(id, bid){
+  if(!confirm(`Delete biller "${bid}"? They will no longer be able to login.`)) return;
+  const r = await fetch(`/api/admin/billers/${id}`, { method:'DELETE' });
+  const d = await r.json();
+  if(d.ok){ toast('Biller deleted'); await loadBillers(); }
+  else toast('Error', 'error');
+}
+
+function showSection(sec){
+  ['billers','stats','logs'].forEach(s => {
+    document.getElementById(`section-${s}`).style.display = s === sec ? '' : 'none';
+    document.getElementById(`nav-${s}`).classList.toggle('active', s === sec);
+  });
+  if(sec === 'stats') loadStats();
+  if(sec === 'logs') loadLogs();
+}
+
+async function doLogout(){
+  await fetch('/api/auth/logout', {method:'POST'});
+  window.location.href = '/admin/login';
+}
+
+function toast(msg, type='success'){
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${type==='success'?'✓':'✕'}</span> ${msg}`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => { el.style.transition='opacity 0.3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 3000);
+}
+function OM(id){ document.getElementById(id).classList.add('show'); }
+function CM(id){ document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('show'); }));
+
+loadBillers();
+</script>
+</body>
+</html>

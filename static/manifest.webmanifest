@@ -1,0 +1,25 @@
+{
+  "name": "Highway Rasoi POS",
+  "short_name": "Rasoi POS",
+  "description": "Restaurant point-of-sale terminal",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f7f6f3",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/static/app-icon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/app-icon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

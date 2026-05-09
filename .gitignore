@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.claude/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Local data — never commit business data; production stores it on Render's
+# persistent disk at $DB_PATH / $UPLOAD_FOLDER.
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# User uploads (logo, images) — produced at runtime, not source code.
+# Match at any depth (covers the testing-copy tree too) but keep .gitkeep so
+# the directory still exists in fresh clones.
+**/static/uploads/*
+!**/static/uploads/.gitkeep
+
+# Build artefacts / packaged outputs
+for testing purposes only/*.zip
+*.bak
+
+# Server logs
+*.log

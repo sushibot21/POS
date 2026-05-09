@@ -1,0 +1,666 @@
+{% extends "base.html" %}
+{% block title %}Hotel{% endblock %}
+{% block head %}
+<style>
+.hotel-wrap{padding:24px;max-width:1300px;margin:0 auto;}
+.h-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
+.h-title{font-size:22px;font-weight:700;letter-spacing:-0.4px;}
+.h-sub{font-size:13px;color:var(--text2);margin-top:2px;}
+
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
+@media(max-width:700px){.stats-row{grid-template-columns:1fr 1fr;}}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
+.stat-val{font-size:24px;font-weight:700;letter-spacing:-0.5px;}
+.stat-lbl{font-size:11px;color:var(--text2);margin-top:4px;font-weight:500;text-transform:uppercase;letter-spacing:0.4px;}
+
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px;}
+.tab{padding:9px 16px;font-size:13px;font-weight:500;color:var(--text2);border-bottom:2px solid transparent;cursor:pointer;transition:color .15s, border-color .15s;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;}
+
+/* CALENDAR */
+.cal-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:16px;}
+.cal-nav{display:flex;align-items:center;gap:6px;}
+.cal-nav-btn{width:32px;height:32px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;}
+.cal-nav-btn:hover{border-color:var(--accent);color:var(--accent);}
+.cal-month-label{font-size:17px;font-weight:700;min-width:160px;text-align:center;letter-spacing:-0.3px;}
+.cal-today-btn{padding:6px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;font-family:'Plus Jakarta Sans';}
+.cal-today-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+.legend{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2);}
+.legend-grad{display:flex;align-items:center;gap:0;height:14px;border-radius:4px;overflow:hidden;border:1px solid var(--border);}
+.legend-stop{width:18px;height:100%;}
+.legend-lbl{font-size:11px;color:var(--text3);}
+
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+.cal-dow{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;text-align:center;padding:4px 0;}
+.cal-cell{aspect-ratio:1;border-radius:10px;border:1px solid var(--border);display:flex;flex-direction:column;justify-content:space-between;padding:8px 10px;cursor:pointer;transition:transform .12s, box-shadow .12s;background:var(--surface);position:relative;overflow:hidden;}
+.cal-cell:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(26,23,20,0.08);}
+.cal-cell.empty{visibility:hidden;}
+.cal-cell.today{outline:2px solid var(--accent);outline-offset:-2px;}
+.cal-day-num{font-size:14px;font-weight:600;}
+.cal-occ{font-size:10px;font-weight:600;align-self:flex-end;opacity:0.85;}
+.cal-occ-bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(0,0,0,0.06);}
+.cal-occ-fill{height:100%;background:var(--accent);transition:width .3s;}
+
+/* Heat shades — 0%, low, mid, high, full */
+.heat-0{background:var(--surface);}
+.heat-1{background:#dbeafe;color:#1e3a8a;border-color:#bfdbfe;}
+.heat-2{background:#93c5fd;color:#0c1f5c;border-color:#60a5fa;}
+.heat-3{background:#3b82f6;color:#fff;border-color:#2563eb;}
+.heat-4{background:#1e3a8a;color:#fff;border-color:#1e3a8a;}
+.heat-3 .cal-occ-bar,.heat-4 .cal-occ-bar{background:rgba(255,255,255,0.18);}
+.heat-3 .cal-occ-fill,.heat-4 .cal-occ-fill{background:#fff;}
+
+/* Year strip — 12 mini cells */
+.year-strip{display:grid;grid-template-columns:repeat(12,1fr);gap:6px;margin-top:18px;}
+.ys-cell{padding:9px 6px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer;text-align:center;transition:all .15s;}
+.ys-cell:hover{border-color:var(--accent);}
+.ys-cell.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,0.12);}
+.ys-mon{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;}
+.ys-pct{font-size:13px;font-weight:700;margin-top:2px;font-family:'Plus Jakarta Sans';}
+
+/* Day-detail drawer */
+.day-detail{margin-top:14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:none;}
+.day-detail.show{display:block;}
+.dd-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.dd-date{font-size:14px;font-weight:700;}
+.dd-stats{font-size:12px;color:var(--text2);}
+.dd-list{display:flex;flex-direction:column;gap:6px;}
+.dd-row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;}
+.dd-room{font-weight:700;color:var(--accent);min-width:55px;}
+.dd-guest{flex:1;color:var(--text);font-weight:500;}
+.dd-status{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;}
+.st-checked_in{background:#dcfce7;color:#166534;}
+.st-reserved{background:#dbeafe;color:#1e40af;}
+.st-checked_out{background:var(--surface3);color:var(--text2);}
+
+/* ROOMS view */
+.floor-section{margin-bottom:20px;}
+.floor-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;}
+.room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;}
+.room-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:6px;min-height:155px;}
+.room-card:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 6px 14px rgba(26,23,20,0.07);}
+.room-card.occupied{background:#fef2f2;border-color:#fecaca;}
+.room-card.reserved{background:#eff6ff;border-color:#bfdbfe;}
+.room-card.maintenance{background:#fffbeb;border-color:#fde68a;}
+.room-num{font-size:22px;font-weight:700;letter-spacing:-0.5px;}
+.room-type{font-size:11px;color:var(--text2);font-weight:500;}
+.room-status{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;width:fit-content;}
+.s-avail{background:#dcfce7;color:#166534;}
+.s-occupied{background:#fee2e2;color:#991b1b;}
+.s-reserved{background:#dbeafe;color:#1e40af;}
+.s-maintenance{background:#fef3c7;color:#92400e;}
+.room-guest{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.room-dates{font-size:10px;color:var(--text3);}
+.room-price{font-size:12px;font-weight:600;color:var(--accent);margin-top:auto;}
+.room-actions{display:flex;gap:5px;flex-wrap:wrap;}
+
+/* History table */
+.hist-table{width:100%;border-collapse:collapse;font-size:13px;}
+.hist-table th{text-align:left;padding:9px 10px;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid var(--border);}
+.hist-table td{padding:10px;border-bottom:1px solid var(--surface3);}
+.hist-table tr:hover td{background:var(--surface2);}
+.hist-table tr:last-child td{border-bottom:none;}
+
+/* Searchable guest field */
+.guest-search-wrap{position:relative;}
+.guest-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;max-height:200px;overflow-y:auto;z-index:200;box-shadow:0 8px 24px rgba(26,23,20,0.12);display:none;margin-top:4px;}
+.guest-drop-item{padding:9px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);transition:background .1s;}
+.guest-drop-item:hover{background:var(--surface2);}
+.guest-drop-item:last-child{border-bottom:none;}
+.guest-drop-item.active{background:var(--accent-light);border-left:3px solid var(--accent);padding-left:9px;}
+.guest-add-inline{padding:9px 12px;cursor:pointer;font-size:12px;color:var(--accent);font-weight:600;border-top:1px solid var(--border);background:var(--accent-light);}
+.guest-selected{margin-top:6px;background:var(--accent-light);border:1px solid var(--accent);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--accent);display:none;justify-content:space-between;align-items:center;font-weight:500;}
+.guest-selected button{background:none;border:none;color:var(--accent);cursor:pointer;font-size:14px;padding:0 4px;}
+</style>
+{% endblock %}
+{% block content %}
+<div class="hotel-wrap">
+  <div class="h-head">
+    <div>
+      <div class="h-title">Hotel</div>
+      <div class="h-sub">Bookings, occupancy and room management</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="window.open('/api/hotel/bookings/export')">⬇ Export CSV</button>
+      <button class="btn btn-primary btn-sm" onclick="OM('add-room-modal')">+ Add Room</button>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat"><div class="stat-val" id="s-total">0</div><div class="stat-lbl">Total Rooms</div></div>
+    <div class="stat"><div class="stat-val" style="color:#16a34a" id="s-avail">0</div><div class="stat-lbl">Available</div></div>
+    <div class="stat"><div class="stat-val" style="color:#dc2626" id="s-occ">0</div><div class="stat-lbl">Occupied</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--accent)" id="s-res">0</div><div class="stat-lbl">Reserved</div></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-cal" onclick="switchView('cal')">📅 Calendar</div>
+    <div class="tab" id="tab-rooms" onclick="switchView('rooms')">🛏 Rooms</div>
+    <div class="tab" id="tab-history" onclick="switchView('history')">📋 Booking History</div>
+  </div>
+
+  <!-- CALENDAR VIEW -->
+  <div id="view-cal" class="panel">
+    <div class="cal-toolbar">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="navMonth(-1)" title="Previous month">‹</button>
+        <div class="cal-month-label" id="cal-month-label">—</div>
+        <button class="cal-nav-btn" onclick="navMonth(1)" title="Next month">›</button>
+        <button class="cal-today-btn" onclick="goToday()">Today</button>
+      </div>
+      <div class="legend">
+        <span class="legend-lbl">Less</span>
+        <div class="legend-grad">
+          <div class="legend-stop heat-0"></div>
+          <div class="legend-stop heat-1"></div>
+          <div class="legend-stop heat-2"></div>
+          <div class="legend-stop heat-3"></div>
+          <div class="legend-stop heat-4"></div>
+        </div>
+        <span class="legend-lbl">More</span>
+        <span style="margin-left:10px;color:var(--text3)">·</span>
+        <span class="legend-lbl" id="cal-month-occ">0% avg</span>
+      </div>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="day-detail" id="day-detail">
+      <div class="dd-head">
+        <div class="dd-date" id="dd-date">—</div>
+        <div class="dd-stats" id="dd-stats">—</div>
+      </div>
+      <div class="dd-list" id="dd-list"></div>
+    </div>
+    <div class="year-strip" id="year-strip"></div>
+  </div>
+
+  <!-- ROOMS VIEW -->
+  <div id="view-rooms" class="panel" style="display:none">
+    <div id="floors-container"><div style="text-align:center;color:var(--text3);padding:40px">Loading...</div></div>
+  </div>
+
+  <!-- HISTORY VIEW -->
+  <div id="view-history" class="panel" style="display:none">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:flex-end">
+      <div><label>Room</label><select id="hist-room" style="width:160px"><option value="">All Rooms</option></select></div>
+      <div><label>From</label><input type="date" id="hist-from" style="width:145px"></div>
+      <div><label>To</label><input type="date" id="hist-to" style="width:145px"></div>
+      <button class="btn btn-primary btn-sm" onclick="loadHistory()">Apply</button>
+      <button class="btn btn-ghost btn-sm" onclick="window.open('/api/hotel/bookings/export')">⬇ Export All</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="hist-table">
+        <thead><tr><th>Room</th><th>Guest</th><th>Phone</th><th>Check-in</th><th>Check-out</th><th>Nights</th><th>Total</th><th>Payment</th><th>Status</th></tr></thead>
+        <tbody id="hist-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ADD ROOM MODAL -->
+<div class="modal-overlay" id="add-room-modal">
+  <div class="modal" style="min-width:400px">
+    <div class="modal-header"><div class="modal-title" id="room-modal-title">Add Room</div><button class="modal-close" onclick="CM('add-room-modal')">✕</button></div>
+    <div style="display:grid;gap:12px">
+      <input type="hidden" id="room-edit-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label>Room Number</label><input type="text" id="r-num" placeholder="e.g. 101"></div>
+        <div><label>Floor</label><input type="number" id="r-floor" placeholder="1" min="1" value="1"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label>Room Type</label>
+          <select id="r-type">
+            <option>Standard</option><option>Deluxe</option><option>Suite</option>
+            <option>AC</option><option>Non-AC</option><option>Family</option><option>Double</option>
+          </select>
+        </div>
+        <div><label>Capacity</label><input type="number" id="r-cap" value="2" min="1"></div>
+      </div>
+      <div><label>Price per Night (₹)</label><input type="number" id="r-price" placeholder="0" min="0"></div>
+      <div><label>Notes</label><input type="text" id="r-notes" placeholder="Any notes..."></div>
+      <button class="btn btn-primary" style="justify-content:center" onclick="saveRoom()">Save Room</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHECK-IN MODAL -->
+<div class="modal-overlay" id="checkin-modal">
+  <div class="modal" style="min-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">Booking — Room <span id="ci-room-num">?</span></div>
+      <button class="modal-close" onclick="CM('checkin-modal')">✕</button>
+    </div>
+    <div style="display:grid;gap:12px">
+      <input type="hidden" id="ci-room-id">
+      <div>
+        <label>Guest <span style="font-weight:400;color:var(--text3)">— search existing or type new</span></label>
+        <div class="guest-search-wrap">
+          <input type="text" id="ci-guest" placeholder="Search by name or phone..." oninput="searchGuest(this.value)" autocomplete="off">
+          <input type="hidden" id="ci-guest-id">
+          <div class="guest-dropdown" id="guest-dropdown"></div>
+          <div class="guest-selected" id="guest-selected"></div>
+        </div>
+      </div>
+      <div><label>Phone</label><input type="tel" id="ci-phone" placeholder="9876543210"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label>Check-in Date</label><input type="date" id="ci-in" onchange="calcNights()"></div>
+        <div><label>Check-out Date</label><input type="date" id="ci-out" onchange="calcNights()"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label>Price per Night (₹)</label><input type="number" id="ci-price" placeholder="0" oninput="calcNights()"></div>
+        <div>
+          <label>Payment</label>
+          <select id="ci-pay"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="due">Due</option></select>
+        </div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 13px;display:flex;justify-content:space-between">
+        <span style="font-size:13px;color:var(--text2)"><span id="nights-count">0</span> nights × ₹<span id="nights-price">0</span></span>
+        <span style="font-size:16px;font-weight:700" id="nights-total">₹0</span>
+      </div>
+      <div style="background:var(--accent-light);border:1px solid #bfdbfe;border-radius:8px;padding:9px 12px;font-size:12px;color:var(--accent)">
+        📅 Future dates → <strong>Reserved</strong>. Today / past → <strong>Occupied</strong>.
+      </div>
+      <div><label>Notes</label><input type="text" id="ci-notes" placeholder="Any special requirements..."></div>
+      <button class="btn btn-primary" style="justify-content:center" onclick="doCheckin()">✓ Confirm Booking</button>
+    </div>
+  </div>
+</div>
+
+<!-- ROOM DETAIL MODAL -->
+<div class="modal-overlay" id="room-detail-modal">
+  <div class="modal" style="min-width:360px">
+    <div class="modal-header"><div class="modal-title" id="rd-title">Room</div><button class="modal-close" onclick="CM('room-detail-modal')">✕</button></div>
+    <div id="rd-body"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const C='{{ settings.currency }}';
+let allRooms=[];
+let calRef = new Date();          // first day of currently-shown month
+let yearOccCache = {};            // {YYYY-MM: avgPct}
+let curDayDetail = null;
+let guestCache = {};
+
+function localDate(d){d=d||new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function fmtDateLong(iso){const d=new Date(iso+'T00:00');return d.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});}
+
+async function load(){
+  const r=await fetch('/api/hotel/rooms'); allRooms=await r.json();
+  renderStats(); renderRooms(); populateRoomSelect();
+  if (document.getElementById('view-cal').style.display !== 'none') renderCalendar();
+}
+
+function renderStats(){
+  document.getElementById('s-total').textContent=allRooms.length;
+  document.getElementById('s-avail').textContent=allRooms.filter(r=>r.status==='available').length;
+  document.getElementById('s-occ').textContent=allRooms.filter(r=>r.status==='occupied').length;
+  document.getElementById('s-res').textContent=allRooms.filter(r=>r.status==='reserved').length;
+}
+
+// ────── CALENDAR ──────
+function navMonth(delta){ calRef = new Date(calRef.getFullYear(), calRef.getMonth()+delta, 1); renderCalendar(); }
+function goToday(){ calRef = new Date(); renderCalendar(); }
+
+function heatClass(pct){
+  if (pct <= 0) return 'heat-0';
+  if (pct < 33)  return 'heat-1';
+  if (pct < 66)  return 'heat-2';
+  if (pct < 100) return 'heat-3';
+  return 'heat-4';
+}
+
+async function renderCalendar(){
+  const y = calRef.getFullYear(), m = calRef.getMonth();
+  const first = new Date(y, m, 1);
+  const lastDay = new Date(y, m+1, 0).getDate();
+  const startISO = localDate(first);
+  const endISO = localDate(new Date(y, m, lastDay));
+  document.getElementById('cal-month-label').textContent = first.toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+
+  // DOW header
+  const dows = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let html = dows.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  // Leading blanks
+  const leading = first.getDay();
+  for (let i=0; i<leading; i++) html += '<div class="cal-cell empty"></div>';
+
+  // Fetch occupancy for this month
+  const r = await fetch(`/api/hotel/calendar?start=${startISO}&end=${endISO}`);
+  const data = await r.json();
+  const total = Math.max(1, data.rooms_total || allRooms.length || 1);
+  const todayISO = localDate();
+  let monthSum = 0, monthDays = 0;
+
+  for (let day=1; day<=lastDay; day++) {
+    const iso = localDate(new Date(y, m, day));
+    const dayRec = (data.days||{})[iso] || {booked:0, bookings:[]};
+    const pct = Math.round((dayRec.booked / total) * 100);
+    monthSum += pct; monthDays++;
+    const cls = heatClass(pct);
+    const isToday = (iso === todayISO);
+    html += `<div class="cal-cell ${cls} ${isToday?'today':''}" data-iso="${iso}" onclick="showDay('${iso}')">
+      <div class="cal-day-num">${day}</div>
+      <div class="cal-occ">${dayRec.booked}/${total}</div>
+      <div class="cal-occ-bar"><div class="cal-occ-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }
+  document.getElementById('cal-grid').innerHTML = html;
+  const monthAvg = monthDays ? Math.round(monthSum/monthDays) : 0;
+  document.getElementById('cal-month-occ').textContent = `${monthAvg}% avg occupancy`;
+  // Cache month avg + year strip refresh
+  yearOccCache[`${y}-${String(m+1).padStart(2,'0')}`] = monthAvg;
+  renderYearStrip();
+  // Hide day detail when navigating
+  document.getElementById('day-detail').classList.remove('show');
+  // Stash latest data so showDay can read without refetch
+  window._calData = data;
+}
+
+async function renderYearStrip(){
+  const y = calRef.getFullYear();
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // Fetch year occupancy in one shot
+  const startISO = `${y}-01-01`;
+  const endISO = `${y}-12-31`;
+  const r = await fetch(`/api/hotel/calendar?start=${startISO}&end=${endISO}`);
+  const data = await r.json();
+  const total = Math.max(1, data.rooms_total || allRooms.length || 1);
+  const monthAgg = {};
+  Object.entries(data.days||{}).forEach(([iso, rec])=>{
+    const mon = iso.slice(0,7);
+    if (!monthAgg[mon]) monthAgg[mon] = {sum:0, n:0};
+    monthAgg[mon].sum += (rec.booked / total) * 100;
+    monthAgg[mon].n++;
+  });
+  let html = '';
+  for (let i=0;i<12;i++){
+    const key = `${y}-${String(i+1).padStart(2,'0')}`;
+    const agg = monthAgg[key]; const pct = agg ? Math.round(agg.sum/agg.n) : 0;
+    const cls = heatClass(pct);
+    const active = (i === calRef.getMonth()) ? 'active' : '';
+    html += `<div class="ys-cell ${active}" onclick="jumpMonth(${y},${i})">
+      <div class="ys-mon">${months[i]}</div>
+      <div class="ys-pct ${cls}" style="display:inline-block;padding:3px 9px;border-radius:6px;border:1px solid transparent">${pct}%</div>
+    </div>`;
+  }
+  document.getElementById('year-strip').innerHTML = html;
+}
+function jumpMonth(y, m){ calRef = new Date(y, m, 1); renderCalendar(); }
+
+function showDay(iso){
+  const data = window._calData; if (!data) return;
+  const rec = (data.days||{})[iso] || {booked:0, bookings:[]};
+  const dd = document.getElementById('day-detail');
+  document.getElementById('dd-date').textContent = fmtDateLong(iso);
+  const total = data.rooms_total || allRooms.length || 0;
+  const pct = total ? Math.round((rec.booked/total)*100) : 0;
+  document.getElementById('dd-stats').textContent = `${rec.booked} of ${total} rooms booked · ${pct}% occupancy`;
+  if (rec.bookings.length) {
+    document.getElementById('dd-list').innerHTML = rec.bookings.map(b=>`
+      <div class="dd-row">
+        <div class="dd-room">Room ${b.room_number}</div>
+        <div class="dd-guest">${b.guest_name || '—'} ${b.phone?`<span style="color:var(--text3);font-weight:400">· ${b.phone}</span>`:''}</div>
+        <div style="color:var(--text3);font-size:11px;margin-right:8px">${b.checkin_date} → ${b.checkout_date}</div>
+        <div class="dd-status st-${b.status}">${b.status.replace('_',' ')}</div>
+      </div>`).join('');
+  } else {
+    document.getElementById('dd-list').innerHTML = `<div style="color:var(--text3);font-size:12px;padding:8px">No bookings on this day.</div>`;
+  }
+  dd.classList.add('show');
+  curDayDetail = iso;
+}
+
+// ────── ROOMS ──────
+function renderRooms(){
+  const floors={};
+  allRooms.forEach(r=>{const f=r.floor||1;if(!floors[f])floors[f]=[];floors[f].push(r);});
+  const el=document.getElementById('floors-container');
+  if(!allRooms.length){el.innerHTML='<div style="text-align:center;color:var(--text3);padding:60px;font-size:13px">No rooms added yet. Click "+ Add Room".</div>';return;}
+  el.innerHTML=Object.keys(floors).sort((a,b)=>a-b).map(fl=>`
+    <div class="floor-section">
+      <div class="floor-title">Floor ${fl} <span style="color:var(--text3);font-weight:500">· ${floors[fl].length} rooms</span></div>
+      <div class="room-grid">${floors[fl].map(renderRoomCard).join('')}</div>
+    </div>`).join('');
+}
+
+function renderRoomCard(r){
+  const sc={available:'s-avail',occupied:'s-occupied',reserved:'s-reserved',maintenance:'s-maintenance'};
+  const statusLabel={available:'Available',occupied:'Occupied',reserved:'Reserved',maintenance:'Maintenance'};
+  return `<div class="room-card ${r.status}" onclick="openRoomDetail(${r.id})">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div class="room-num">${r.room_number}</div>
+        <div class="room-type">${r.room_type} · ${r.capacity} guests</div>
+      </div>
+      <div class="room-status ${sc[r.status]||'s-avail'}">${statusLabel[r.status]||r.status}</div>
+    </div>
+    ${r.current_guest?`<div class="room-guest">👤 ${r.current_guest}</div>`:''}
+    ${r.checkin_date?`<div class="room-dates">In: ${r.checkin_date}${r.checkout_date?' · Out: '+r.checkout_date:''}</div>`:''}
+    <div class="room-price">${C}${r.price_per_night}/night</div>
+    <div class="room-actions" onclick="event.stopPropagation()">
+      ${r.status==='available'?`<button class="btn btn-primary btn-sm" onclick="openCheckin(${r.id},'${r.room_number}',${r.price_per_night})">Book</button>`:''}
+      ${r.status==='occupied'||r.status==='reserved'?`<button class="btn btn-danger btn-sm" onclick="doCheckout(${r.id})">Check Out</button>`:''}
+      <button class="btn btn-ghost btn-sm" onclick="editRoom(${r.id})">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="delRoom(${r.id},'${r.room_number}')">✕</button>
+    </div>
+  </div>`;
+}
+
+function openRoomDetail(rid){
+  const r=allRooms.find(x=>x.id===rid);if(!r) return;
+  const sc={available:'badge-green',occupied:'badge-red',reserved:'badge-blue',maintenance:'badge-yellow'};
+  document.getElementById('rd-title').textContent=`Room ${r.room_number} — ${r.room_type}`;
+  document.getElementById('rd-body').innerHTML=`
+    <div style="display:grid;gap:8px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text2);font-size:13px">Status</span><span class="badge ${sc[r.status]||'badge-green'}">${r.status}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text2);font-size:13px">Floor</span><span style="font-weight:600">${r.floor}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text2);font-size:13px">Type</span><span style="font-weight:600">${r.room_type}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text2);font-size:13px">Capacity</span><span style="font-weight:600">${r.capacity} guests</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text2);font-size:13px">Price/Night</span><span style="font-weight:700;color:var(--accent)">${C}${r.price_per_night}</span></div>
+      ${r.current_guest?`<div style="display:flex;justify-content:space-between"><span style="color:var(--text2);font-size:13px">Guest</span><span style="font-weight:600">${r.current_guest}</span></div>`:''}
+      ${r.checkin_date?`<div style="display:flex;justify-content:space-between"><span style="color:var(--text2);font-size:13px">Check-in</span><span>${r.checkin_date}</span></div>`:''}
+      ${r.checkout_date?`<div style="display:flex;justify-content:space-between"><span style="color:var(--text2);font-size:13px">Check-out</span><span>${r.checkout_date}</span></div>`:''}
+      ${r.notes?`<div style="background:var(--surface2);border-radius:6px;padding:8px;font-size:12px;color:var(--text2)">${r.notes}</div>`:''}
+    </div>
+    <div style="display:flex;gap:8px">
+      ${r.status==='available'?`<button class="btn btn-primary" style="flex:1;justify-content:center" onclick="CM('room-detail-modal');openCheckin(${r.id},'${r.room_number}',${r.price_per_night})">Book Room</button>`:''}
+      ${r.status==='occupied'||r.status==='reserved'?`<button class="btn btn-danger" style="flex:1;justify-content:center" onclick="CM('room-detail-modal');doCheckout(${r.id})">Check Out</button>`:''}
+      <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="CM('room-detail-modal');editRoom(${r.id})">Edit</button>
+    </div>`;
+  OM('room-detail-modal');
+}
+
+function editRoom(rid){
+  const r=allRooms.find(x=>x.id===rid);if(!r) return;
+  CM('room-detail-modal');
+  document.getElementById('room-edit-id').value=rid;
+  document.getElementById('r-num').value=r.room_number;
+  document.getElementById('r-floor').value=r.floor;
+  document.getElementById('r-type').value=r.room_type;
+  document.getElementById('r-cap').value=r.capacity;
+  document.getElementById('r-price').value=r.price_per_night;
+  document.getElementById('r-notes').value=r.notes||'';
+  document.getElementById('room-modal-title').textContent='Edit Room';
+  OM('add-room-modal');
+}
+
+async function saveRoom(){
+  const id=document.getElementById('room-edit-id').value;
+  const data={room_number:document.getElementById('r-num').value.trim(),floor:parseInt(document.getElementById('r-floor').value)||1,room_type:document.getElementById('r-type').value,capacity:parseInt(document.getElementById('r-cap').value)||2,price:parseFloat(document.getElementById('r-price').value)||0,notes:document.getElementById('r-notes').value};
+  if(!data.room_number){toast('Enter room number','error');return;}
+  const r=await fetch(id?`/api/hotel/rooms/${id}`:'/api/hotel/rooms',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const resp=await r.json();
+  if(resp.ok){CM('add-room-modal');toast(id?'Updated':'Room added');await load();}
+  else toast(resp.error||'Error','error');
+}
+
+// ────── BOOKING / CHECK-IN ──────
+function openCheckin(rid,rnum,price){
+  document.getElementById('ci-room-id').value=rid;
+  document.getElementById('ci-room-num').textContent=rnum;
+  document.getElementById('ci-guest').value='';
+  document.getElementById('ci-guest-id').value='';
+  document.getElementById('guest-selected').style.display='none';
+  document.getElementById('guest-dropdown').style.display='none';
+  document.getElementById('ci-phone').value='';
+  document.getElementById('ci-notes').value='';
+  document.getElementById('ci-price').value=price;
+  document.getElementById('ci-in').value=localDate();
+  document.getElementById('ci-out').value=localDate(new Date(Date.now()+86400000));
+  calcNights();
+  OM('checkin-modal');
+}
+
+let guestTimer=null;
+function searchGuest(q){
+  clearTimeout(guestTimer);
+  const dd=document.getElementById('guest-dropdown');
+  document.getElementById('ci-guest-id').value='';
+  document.getElementById('guest-selected').style.display='none';
+  if(!q.trim()){dd.style.display='none';return;}
+  guestTimer=setTimeout(async()=>{
+    const r=await fetch(`/api/customers?q=${encodeURIComponent(q)}`);
+    const custs=await r.json();
+    guestCache=Object.fromEntries(custs.map(c=>[c.id,c]));
+    let html=custs.slice(0,6).map((c,idx)=>`
+      <div class="guest-drop-item ${idx===0?'active':''}" data-cid="${c.id}" onmousedown="pickGuestCached(${c.id});return false;">
+        <strong>${c.name}</strong> <span style="color:var(--text2);font-size:11px">${c.phone||''}</span>
+      </div>`).join('');
+    if(!custs.length) html=`<div style="padding:9px 12px;font-size:12px;color:var(--text3)">No customer found</div>`;
+    html+=`<div class="guest-add-inline" onmousedown="useTypedGuest('${q.replace(/'/g,"\\'")}');return false;">➕ Use "${q}" as new guest</div>`;
+    dd.innerHTML=html;
+    dd.style.display='block';
+  },200);
+}
+function pickGuestCached(cid){
+  const c=guestCache[cid]; if(!c) return;
+  document.getElementById('ci-guest').value=c.name;
+  document.getElementById('ci-phone').value=c.phone||'';
+  document.getElementById('ci-guest-id').value=cid;
+  document.getElementById('guest-dropdown').style.display='none';
+  const sel=document.getElementById('guest-selected');
+  sel.style.display='flex';
+  sel.innerHTML=`<span>👤 <strong>${c.name}</strong>${c.phone?` · ${c.phone}`:''}</span>
+                 <button type="button" onclick="clearGuestPick()">✕</button>`;
+}
+function useTypedGuest(name){
+  document.getElementById('ci-guest').value=name;
+  document.getElementById('ci-guest-id').value='';
+  document.getElementById('guest-dropdown').style.display='none';
+  // Auto-detect phone in typed value
+  if (/^[0-9+\-\s()]{6,}$/.test(name) && !document.getElementById('ci-phone').value) {
+    document.getElementById('ci-phone').value = name;
+  }
+}
+function clearGuestPick(){
+  document.getElementById('ci-guest').value='';
+  document.getElementById('ci-phone').value='';
+  document.getElementById('ci-guest-id').value='';
+  document.getElementById('guest-selected').style.display='none';
+}
+document.getElementById('ci-guest').addEventListener('keydown',e=>{
+  if(e.key!=='Enter') return;
+  const first=document.querySelector('#guest-dropdown .guest-drop-item[data-cid]');
+  if(first){ e.preventDefault(); pickGuestCached(parseInt(first.dataset.cid,10)); }
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.guest-search-wrap')) document.getElementById('guest-dropdown').style.display='none';
+});
+
+function calcNights(){
+  const inD=document.getElementById('ci-in').value;
+  const outD=document.getElementById('ci-out').value;
+  const price=parseFloat(document.getElementById('ci-price').value)||0;
+  let nights=1;
+  if(inD&&outD){try{nights=Math.max(1,Math.round((new Date(outD)-new Date(inD))/(1000*86400)));}catch(e){}}
+  document.getElementById('nights-count').textContent=nights;
+  document.getElementById('nights-price').textContent=price;
+  document.getElementById('nights-total').textContent=C+(nights*price).toFixed(0);
+}
+
+async function doCheckin(){
+  const guest=document.getElementById('ci-guest').value.trim();
+  if(!guest){toast('Enter guest name','error');return;}
+  // If guest is brand-new (no id selected), persist them so future searches find them
+  let custId = document.getElementById('ci-guest-id').value;
+  if (!custId) {
+    try {
+      const phone = document.getElementById('ci-phone').value;
+      const cr = await fetch('/api/customers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:guest,phone})});
+      const cd = await cr.json();
+      if (cd && cd.ok) custId = cd.id;
+    } catch(e) {}
+  }
+  const rid=document.getElementById('ci-room-id').value;
+  await fetch(`/api/hotel/rooms/${rid}/checkin`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    guest,phone:document.getElementById('ci-phone').value,
+    checkin:document.getElementById('ci-in').value,
+    checkout:document.getElementById('ci-out').value,
+    price_per_night:parseFloat(document.getElementById('ci-price').value)||0,
+    payment_method:document.getElementById('ci-pay').value,
+    notes:document.getElementById('ci-notes').value
+  })});
+  CM('checkin-modal');toast('Booking confirmed ✓');await load();
+}
+async function doCheckout(rid){
+  if(!confirm('Check out guest?')) return;
+  await fetch(`/api/hotel/rooms/${rid}/checkout`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+  toast('Checked out ✓');await load();
+}
+async function delRoom(rid,rnum){
+  if(!confirm(`Delete Room ${rnum}?`)) return;
+  await fetch(`/api/hotel/rooms/${rid}`,{method:'DELETE'});toast('Room deleted');await load();
+}
+
+// ────── HISTORY ──────
+function populateRoomSelect(){
+  document.getElementById('hist-room').innerHTML='<option value="">All Rooms</option>'+allRooms.map(r=>`<option value="${r.id}">Room ${r.room_number}</option>`).join('');
+}
+async function loadHistory(){
+  const rid=document.getElementById('hist-room').value;
+  const from=document.getElementById('hist-from').value;
+  const to=document.getElementById('hist-to').value;
+  const r=await fetch(`/api/hotel/bookings?room_id=${rid}&start=${from}&end=${to}`);
+  const rows=await r.json();
+  const statusColors={checked_in:'badge-orange',checked_out:'badge-green',upcoming:'badge-blue',reserved:'badge-blue',occupied:'badge-orange'};
+  document.getElementById('hist-tbody').innerHTML=rows.length?
+    rows.map(b=>`<tr>
+      <td style="font-weight:600">${b.room_number}</td>
+      <td style="font-weight:500">${b.guest_name}</td>
+      <td style="color:var(--text2);font-size:12px">${b.phone||'—'}</td>
+      <td>${b.checkin_date}</td>
+      <td>${b.checkout_date||'—'}</td>
+      <td class="mono">${b.nights}</td>
+      <td class="mono">${C}${b.total_amount.toFixed(0)}</td>
+      <td style="font-size:12px">${b.payment_method}</td>
+      <td><span class="badge ${statusColors[b.status]||'badge-green'}">${b.status}</span></td>
+    </tr>`).join(''):'<tr><td colspan="9" style="color:var(--text3);text-align:center;padding:20px">No bookings found</td></tr>';
+}
+
+function switchView(v){
+  ['cal','rooms','history'].forEach(x=>{
+    document.getElementById(`view-${x}`).style.display = (x===v?'':'none');
+    document.getElementById(`tab-${x}`).classList.toggle('active', x===v);
+  });
+  if(v==='history') loadHistory();
+  if(v==='cal') renderCalendar();
+}
+function OM(id){document.getElementById(id).classList.add('show');}
+function CM(id){document.getElementById(id).classList.remove('show');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');}));
+
+function onRealtimeUpdate(d){ if(d && d.type==='hotel_updated') load(); }
+
+// Init
+const today=localDate();
+const monthAgo=localDate(new Date(Date.now()-30*86400000));
+document.getElementById('hist-from').value=monthAgo;
+document.getElementById('hist-to').value=today;
+load();
+</script>
+{% endblock %}

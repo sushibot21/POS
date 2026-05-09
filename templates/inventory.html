@@ -1,0 +1,699 @@
+{% extends "base.html" %}
+{% block title %}Inventory{% endblock %}
+{% block head %}
+<style>
+.inv-wrap{padding:20px;max-width:1300px;margin:0 auto;}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+@media(max-width:600px){.stats-row{grid-template-columns:1fr 1fr;}}
+.stat{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:13px 14px;box-shadow:var(--shadow);}
+.stat-val{font-size:22px;font-weight:800;font-family:'Plus Jakarta Sans';}
+.stat-lbl{font-size:10px;color:var(--text2);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;}
+.inv-table{width:100%;border-collapse:collapse;font-size:13px;}
+.inv-table th{text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.3px;border-bottom:1.5px solid var(--border);}
+.inv-table td{padding:9px 10px;border-bottom:1px solid var(--surface3);vertical-align:middle;}
+.inv-table tr:hover td{background:var(--surface2);}
+.inv-table tr:last-child td{border-bottom:none;}
+.low-row td{background:#fff8f8!important;}
+.adj-wrap{display:flex;align-items:center;gap:4px;}
+.adj-btn{width:24px;height:24px;border-radius:6px;background:var(--surface2);border:1.5px solid var(--border);cursor:pointer;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all 0.12s;}
+.adj-btn.p:hover{background:var(--green-bg);border-color:#86efac;color:var(--green);}
+.adj-btn.m:hover{background:var(--red-bg);border-color:#fca5a5;color:var(--red);}
+.adj-input{width:50px;text-align:center;font-family:'Plus Jakarta Sans';font-size:12px;padding:4px;}
+.pos-tab{padding:9px 16px;font-size:13px;font-weight:600;color:var(--text2);border-bottom:2px solid transparent;cursor:pointer;transition:all 0.15s;}
+.pos-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.purchase-section{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:4px;}
+.pay-pill{padding:6px 8px;border-radius:7px;font-size:11px;font-weight:700;border:1.5px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;transition:all 0.15s;text-align:center;}
+.pay-pill:hover{border-color:var(--accent);color:var(--accent);}
+.pay-pill.sel{background:var(--accent);color:white;border-color:var(--accent);}
+/* Inline supplier add */
+.sup-search-wrap{position:relative;}
+.sup-input-row{display:flex;gap:8px;align-items:center;}
+.sup-input-row input{flex:1;min-width:0;}
+.sup-inline-add-btn{display:none;white-space:nowrap;padding:0 14px;border-radius:7px;border:1.5px solid var(--accent);background:var(--accent-light);color:var(--accent);font-size:11px;font-weight:800;font-family:'Plus Jakarta Sans';cursor:pointer;align-items:center;justify-content:center;height:38px;line-height:1;flex-shrink:0;}
+.sup-inline-add-btn:hover{background:var(--accent);color:white;}
+.sup-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);z-index:50;box-shadow:var(--shadow-lg);display:none;max-height:200px;overflow-y:auto;}
+.sup-drop-item{padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);transition:background 0.1s;}
+.sup-drop-item:hover{background:var(--surface2);}
+.sup-drop-item:last-child{border-bottom:none;}
+.sup-drop-item.active{background:var(--accent-light);border-left:3px solid var(--accent);padding-left:9px;}
+.sup-add-inline{padding:9px 12px;cursor:pointer;font-size:12px;color:var(--accent);font-weight:700;border-top:1.5px solid var(--border);background:var(--accent-light);}
+.sup-add-inline:hover{background:rgba(37,99,235,0.15);}
+.sup-selected-chip{margin-top:6px;background:var(--accent-light);border:1.5px solid var(--accent);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--accent);display:flex;justify-content:space-between;align-items:center;font-weight:600;}
+.sup-selected-chip button{background:none;border:none;color:var(--accent);cursor:pointer;font-size:14px;padding:0 4px;}
+.new-sup-form{background:var(--accent-light);border:1.5px solid var(--accent);border-radius:var(--radius-sm);padding:12px;margin-top:6px;display:none;}
+</style>
+{% endblock %}
+{% block content %}
+<div class="inv-wrap">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px">Inventory Master</div>
+      <div style="font-size:13px;color:var(--text2)">Stock, suppliers and purchase tracking</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="window.open('/api/inventory/export')">⬇ Export CSV</button>
+      <button class="btn btn-primary" onclick="openAddItem()">+ Add Item</button>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat"><div class="stat-val" id="s-total">0</div><div class="stat-lbl">Total Items</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--red)" id="s-low">0</div><div class="stat-lbl">Low Stock</div></div>
+    <div class="stat"><div class="stat-val" id="s-out">0</div><div class="stat-lbl">Out of Stock</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--green)" id="s-val">₹0</div><div class="stat-lbl">Inventory Value</div></div>
+  </div>
+
+  <div style="display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:0">
+    <div class="pos-tab active" id="tab-inventory" onclick="switchView('inventory')">📦 Items</div>
+    <div class="pos-tab" id="tab-suppliers" onclick="switchView('suppliers')">👥 Suppliers</div>
+    <div class="pos-tab" id="tab-purchases" onclick="switchView('purchases')">🛒 Purchases</div>
+  </div>
+
+  <!-- ITEMS -->
+  <div id="view-inventory" style="background:var(--surface);border:1.5px solid var(--border);border-top:none;border-radius:0 var(--radius) var(--radius) var(--radius);padding:16px;box-shadow:var(--shadow)">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <input type="text" id="inv-search" placeholder="Search items..." style="max-width:220px" oninput="renderItems()">
+      <button class="btn btn-ghost btn-sm" onclick="setFilter('all')" id="f-all" style="border-color:var(--accent);color:var(--accent)">All</button>
+      <button class="btn btn-ghost btn-sm" onclick="setFilter('low')" id="f-low">⚠ Low</button>
+      <button class="btn btn-ghost btn-sm" onclick="setFilter('out')" id="f-out">❌ Out</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="inv-table">
+        <thead><tr><th>Item</th><th>Unit</th><th>Stock</th><th>Alert</th><th>Cost/Unit</th><th>Value</th><th>Supplier</th><th>Adjust</th><th>Actions</th></tr></thead>
+        <tbody id="inv-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SUPPLIERS -->
+  <div id="view-suppliers" style="display:none;background:var(--surface);border:1.5px solid var(--border);border-top:none;border-radius:0 var(--radius) var(--radius) var(--radius);padding:16px;box-shadow:var(--shadow)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:700">Suppliers</div>
+      <button class="btn btn-primary btn-sm" onclick="OM('sup-modal')">+ Add Supplier</button>
+    </div>
+    <div id="suppliers-list"></div>
+  </div>
+
+  <!-- PURCHASES -->
+  <div id="view-purchases" style="display:none;background:var(--surface);border:1.5px solid var(--border);border-top:none;border-radius:0 var(--radius) var(--radius) var(--radius);padding:16px;box-shadow:var(--shadow)">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:flex-end">
+      <div><label>Supplier</label><select id="pur-sup" style="width:180px"><option value="">All Suppliers</option></select></div>
+      <div><label>From</label><input type="date" id="pur-from" style="width:145px"></div>
+      <div><label>To</label><input type="date" id="pur-to" style="width:145px"></div>
+      <button class="btn btn-primary btn-sm" onclick="loadPurchases()">Apply</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportPurchases()">⬇ Export</button>
+    </div>
+    <div id="pur-summary" style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap"></div>
+    <div style="overflow-x:auto">
+      <table class="inv-table">
+        <thead><tr><th>Date</th><th>Supplier</th><th>Item</th><th>Qty</th><th>Cost/Unit</th><th>Total</th><th>Payment</th><th>Due?</th></tr></thead>
+        <tbody id="pur-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ADD/EDIT ITEM MODAL -->
+<div class="modal-overlay" id="inv-modal">
+  <div class="modal" style="min-width:500px;max-width:620px">
+    <div class="modal-header"><div class="modal-title" id="inv-modal-title">Add Inventory Item</div><button class="modal-close" onclick="CM('inv-modal')">✕</button></div>
+    <div style="display:grid;gap:12px;max-height:82vh;overflow-y:auto;padding-right:4px">
+      <input type="hidden" id="inv-edit-id">
+      <div><label>Item Name *</label><input type="text" id="inv-name" placeholder="e.g. Paneer, Tomatoes, Oil..."></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label>Unit</label>
+          <select id="inv-unit">
+            <option value="kg">kg</option><option value="gm">gm</option>
+            <option value="litre">litre</option><option value="ml">ml</option>
+            <option value="unit">unit (pcs)</option><option value="dozen">dozen</option>
+            <option value="packet">packet</option><option value="bottle">bottle</option><option value="box">box</option>
+          </select>
+        </div>
+        <!-- SUPPLIER SEARCHABLE WITH INLINE CREATE -->
+        <div>
+          <label>Supplier <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
+          <div class="sup-search-wrap">
+            <div class="sup-input-row">
+              <input type="text" id="inv-supplier-search" placeholder="Search by name or phone..." oninput="searchSupplier(this.value)" onfocus="searchSupplier(this.value, true)" autocomplete="off">
+              <button type="button" class="sup-inline-add-btn" id="sup-inline-add-btn" onclick="createSupplierFromInput()">+ Add</button>
+            </div>
+            <input type="hidden" id="inv-supplier-id">
+            <div class="sup-dropdown" id="sup-dropdown"></div>
+            <div id="sup-selected" style="display:none"></div>
+          </div>
+          <!-- INLINE NEW SUPPLIER FORM -->
+          <div class="new-sup-form" id="new-sup-form">
+            <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:8px">➕ Create New Supplier</div>
+            <div style="display:grid;gap:8px">
+              <input type="text" id="ns-name" placeholder="Supplier name *" style="font-size:12px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <input type="tel" id="ns-phone" placeholder="Phone" style="font-size:12px">
+                <input type="email" id="ns-email" placeholder="Email" style="font-size:12px">
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="createSupplierInline()">Save Supplier</button>
+                <button class="btn btn-ghost btn-sm" onclick="cancelNewSupplier()">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- STOCK ROW: when editing existing item, show current stock readonly + "add new stock" field -->
+      <div id="stock-edit-row" style="display:none;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:0">
+        <div style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">Stock</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end">
+          <div>
+            <label style="font-size:11px">Current Stock</label>
+            <input type="text" id="inv-stock-current" readonly style="background:var(--surface3);font-family:'Plus Jakarta Sans';font-weight:700;cursor:not-allowed">
+          </div>
+          <div>
+            <label style="font-size:11px">Add New Stock <span style="font-weight:400;color:var(--text3)">(will be added to current)</span></label>
+            <input type="number" id="inv-stock-add" placeholder="0" min="0" step="0.01" oninput="syncAddStockToPurchase()">
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px" id="stock-after-display"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div id="initial-stock-wrap"><label>Initial Stock</label><input type="number" id="inv-stock" placeholder="0" min="0" step="0.01"></div>
+        <div><label>Low Alert at</label><input type="number" id="inv-thresh" placeholder="5" min="0" step="0.01"></div>
+        <div><label>Cost per Unit (₹)</label><input type="number" id="inv-cost" placeholder="0" min="0" step="0.01"></div>
+      </div>
+
+      <!-- PURCHASE SECTION — shown when supplier selected -->
+      <div class="purchase-section" id="purchase-section" style="display:none">
+        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">📦 Record as Purchase</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Record how this stock was purchased from the supplier</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div><label>Quantity Purchased</label><input type="number" id="pur-qty" placeholder="0" min="0" step="0.001" oninput="calcPurTotal()"></div>
+          <div><label>Cost per Unit (₹)</label><input type="number" id="pur-cpu" placeholder="0" min="0" step="0.01" oninput="calcPurTotal()"></div>
+        </div>
+        <div style="background:var(--surface);border-radius:6px;padding:9px 12px;display:flex;justify-content:space-between;margin-bottom:10px;border:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--text2)">Total Purchase Cost</span>
+          <span style="font-size:15px;font-weight:800;font-family:'Plus Jakarta Sans'" id="pur-total-display">₹0</span>
+        </div>
+        <div><label style="margin-bottom:6px">Payment Method</label>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+            <div class="pay-pill sel" id="pp-cash" onclick="selPP('cash')">💵 Cash</div>
+            <div class="pay-pill" id="pp-upi" onclick="selPP('upi')">📱 UPI</div>
+            <div class="pay-pill" id="pp-card" onclick="selPP('card')">💳 Card</div>
+            <div class="pay-pill" id="pp-due" onclick="selPP('due')">💸 Due</div>
+          </div>
+        </div>
+        <div style="margin-top:8px"><label>Notes</label><input type="text" id="pur-notes" placeholder="Invoice #, remarks..."></div>
+      </div>
+
+      <button class="btn btn-primary" style="justify-content:center" onclick="saveInv()">Save Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUPPLIER MODAL (full form) -->
+<div class="modal-overlay" id="sup-modal">
+  <div class="modal" style="min-width:420px">
+    <div class="modal-header"><div class="modal-title" id="sup-modal-title">Add Supplier</div><button class="modal-close" onclick="CM('sup-modal')">✕</button></div>
+    <div style="display:grid;gap:12px">
+      <input type="hidden" id="sup-edit-id">
+      <div><label>Name *</label><input type="text" id="sup-name" placeholder="e.g. Fresh Farms"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label>Phone</label><input type="tel" id="sup-phone" placeholder="9876543210"></div>
+        <div><label>Email</label><input type="email" id="sup-email" placeholder="supplier@email.com"></div>
+      </div>
+      <div><label>Address</label><input type="text" id="sup-addr" placeholder="Street, City"></div>
+      <div><label>Notes</label><input type="text" id="sup-notes"></div>
+      <button class="btn btn-primary" style="justify-content:center" onclick="saveSupplier()">Save Supplier</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUPPLIER DETAIL MODAL -->
+<div class="modal-overlay" id="sup-detail-modal">
+  <div class="modal" style="min-width:500px;max-width:650px">
+    <div class="modal-header"><div class="modal-title" id="sd-title">Supplier</div><button class="modal-close" onclick="CM('sup-detail-modal')">✕</button></div>
+    <div id="sd-body"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const C='{{ settings.currency }}';
+let allInv=[], allSuppliers=[], filterStatus='all', purMethod='cash';
+
+async function loadAll(){
+  const [invR,supR]=await Promise.all([fetch('/api/inventory'),fetch('/api/suppliers')]);
+  allInv=await invR.json(); allSuppliers=await supR.json();
+  renderStats(); renderItems(); renderSuppliers(); populateSelects();
+}
+
+function renderStats(){
+  document.getElementById('s-total').textContent=allInv.length;
+  document.getElementById('s-low').textContent=allInv.filter(i=>i.stock<=i.low_threshold&&i.stock>0).length;
+  document.getElementById('s-out').textContent=allInv.filter(i=>i.stock<=0).length;
+  document.getElementById('s-val').textContent=C+Math.round(allInv.reduce((s,i)=>s+i.stock*i.cost_per_unit,0)).toLocaleString('en-IN');
+}
+function setFilter(f){
+  filterStatus=f;
+  ['all','low','out'].forEach(x=>{const el=document.getElementById(`f-${x}`);el.style.borderColor=x===f?'var(--accent)':'';el.style.color=x===f?'var(--accent)':'';});
+  renderItems();
+}
+function renderItems(){
+  const q=document.getElementById('inv-search').value.toLowerCase();
+  let items=allInv;
+  if(q) items=items.filter(i=>i.name.toLowerCase().includes(q)||(i.supplier_name||'').toLowerCase().includes(q));
+  if(filterStatus==='low') items=items.filter(i=>i.stock<=i.low_threshold&&i.stock>0);
+  if(filterStatus==='out') items=items.filter(i=>i.stock<=0);
+  document.getElementById('inv-tbody').innerHTML=items.map(i=>{
+    const isOut=i.stock<=0,isLow=i.stock<=i.low_threshold;
+    return `<tr class="${isLow?'low-row':''}">
+      <td style="font-weight:600">${i.name}</td>
+      <td style="color:var(--text2)">${i.unit}</td>
+      <td class="mono" style="font-weight:700;color:${isOut?'var(--red)':isLow?'var(--yellow)':'var(--text)'}">${i.stock}</td>
+      <td class="mono" style="color:var(--text3)">${i.low_threshold}</td>
+      <td class="mono">${C}${i.cost_per_unit}</td>
+      <td class="mono" style="color:var(--text2)">${C}${Math.round(i.stock*i.cost_per_unit)}</td>
+      <td style="font-size:12px;color:var(--text2)">${i.supplier_name||'—'}</td>
+      <td><div class="adj-wrap">
+        <button class="adj-btn m" onclick="adjust(${i.id},-1)">−</button>
+        <input class="adj-input" type="number" id="adj-${i.id}" value="1" min="0.001" step="0.001">
+        <button class="adj-btn p" onclick="adjust(${i.id},1)">+</button>
+      </div></td>
+      <td><div style="display:flex;gap:5px">
+        <button class="btn btn-ghost btn-sm" onclick="editInv(${i.id})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="delInv(${i.id},'${i.name.replace(/'/g,"\\'")}')">Del</button>
+      </div></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="9" style="color:var(--text3);text-align:center;padding:20px">No items</td></tr>';
+}
+function populateSelects(){
+  const purOpts='<option value="">All Suppliers</option>'+allSuppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  document.getElementById('pur-sup').innerHTML=purOpts;
+}
+
+// ── SUPPLIER SEARCH WITH INLINE CREATE ───────────────────────────────────────
+let supSearchTimer=null, supLastMatches=[];
+function updateSupAddButton(matches){
+  const btn=document.getElementById('sup-inline-add-btn');
+  const input=document.getElementById('inv-supplier-search');
+  if(!btn||!input) return;
+  const q=input.value.trim();
+  const sid=document.getElementById('inv-supplier-id').value;
+  const list=matches||supLastMatches;
+  const hasExact=list.some(s=>String(s.name||'').toLowerCase()===q.toLowerCase()||String(s.phone||'')===q);
+  btn.style.display=(q&&!sid&&!hasExact)?'inline-flex':'none';
+}
+function searchSupplier(q, showAll=false){
+  clearTimeout(supSearchTimer);
+  const dd=document.getElementById('sup-dropdown');
+  // Typing clears any current selection
+  document.getElementById('inv-supplier-id').value='';
+  document.getElementById('sup-selected').style.display='none';
+  togglePurchaseSection();
+  // If empty input and not explicitly told to show all, hide dropdown
+  if(!q.trim() && !showAll){dd.style.display='none';updateSupAddButton([]);return;}
+  supSearchTimer=setTimeout(()=>{
+    const matches=q.trim()
+      ? allSuppliers.filter(s=>s.name.toLowerCase().includes(q.toLowerCase())||(s.phone||'').includes(q.trim()))
+      : allSuppliers.slice(); // show all when focused with empty input
+    supLastMatches=matches;
+    dd.style.display='block';
+    let html='';
+    if(!matches.length && !q.trim()){
+      html='<div style="padding:9px 12px;font-size:12px;color:var(--text3)">No suppliers yet. Type a name to add one.</div>';
+    } else if(!matches.length){
+      html='<div style="padding:9px 12px;font-size:12px;color:var(--text3)">No supplier found</div>';
+    } else {
+      html=matches.slice(0,8).map((s,idx)=>`
+        <div class="sup-drop-item ${idx===0?'active':''}" data-sup-id="${s.id}" onmousedown="selectSupplierCached(${s.id}); return false;">
+          <strong>${s.name}</strong> ${s.phone?`<span style="color:var(--text3);font-size:11px">· ${s.phone}</span>`:''}
+        </div>`).join('');
+    }
+    if(q.trim()){
+      html+=`<div class="sup-add-inline" onmousedown="createSupplierFromInput(); return false;">➕ Add "${q}" as new supplier</div>`;
+    } else {
+      html+=`<div class="sup-add-inline" onmousedown="showNewSupplierForm(''); return false;">➕ Add a new supplier (with details)</div>`;
+    }
+    dd.innerHTML=html;
+    updateSupAddButton(matches);
+  },150);
+}
+function selectSupplierCached(id){
+  const s=supLastMatches.find(x=>x.id===id)||allSuppliers.find(x=>x.id===id);
+  if(s) selectSupplier(s.id,s.name);
+}
+function selectSupplier(id,name){
+  document.getElementById('inv-supplier-id').value=id;
+  document.getElementById('inv-supplier-search').value=name;
+  document.getElementById('sup-dropdown').style.display='none';
+  document.getElementById('new-sup-form').style.display='none';
+  const chip=document.getElementById('sup-selected');
+  chip.style.display='block';
+  chip.innerHTML=`<div class="sup-selected-chip"><span>👥 <strong>${name}</strong></span><button type="button" onclick="clearSelectedSupplier()" title="Remove">✕</button></div>`;
+  updateSupAddButton();
+  togglePurchaseSection();
+}
+function clearSelectedSupplier(){
+  document.getElementById('inv-supplier-id').value='';
+  document.getElementById('inv-supplier-search').value='';
+  document.getElementById('sup-selected').style.display='none';
+  document.getElementById('sup-dropdown').style.display='none';
+  updateSupAddButton([]);
+  togglePurchaseSection();
+}
+function showNewSupplierForm(prefill=''){
+  document.getElementById('sup-dropdown').style.display='none';
+  document.getElementById('ns-name').value=prefill;
+  document.getElementById('ns-phone').value='';
+  document.getElementById('ns-email').value='';
+  document.getElementById('new-sup-form').style.display='block';
+  document.getElementById('ns-name').focus();
+}
+function cancelNewSupplier(){
+  document.getElementById('new-sup-form').style.display='none';
+  document.getElementById('inv-supplier-search').value='';
+  document.getElementById('inv-supplier-id').value='';
+  document.getElementById('sup-selected').style.display='none';
+  updateSupAddButton([]);
+  togglePurchaseSection();
+}
+async function createSupplierInline(){
+  const name=document.getElementById('ns-name').value.trim();
+  if(!name){toast('Enter supplier name','error');return;}
+  const r=await fetch('/api/suppliers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone:document.getElementById('ns-phone').value,email:document.getElementById('ns-email').value})});
+  const d=await r.json();
+  if(d.ok){
+    selectSupplier(d.id, name);
+    document.getElementById('new-sup-form').style.display='none';
+    toast(`Supplier "${name}" created ✓`);
+    const r2=await fetch('/api/suppliers');
+    allSuppliers=await r2.json();
+    populateSelects();
+    renderSuppliers();
+  }
+}
+// Quick-add: create supplier with just the typed value (phone if numeric, else name)
+async function createSupplierFromInput(){
+  const input=document.getElementById('inv-supplier-search');
+  const val=input.value.trim();
+  if(!val){toast('Enter supplier name or phone','error');return;}
+  const btn=document.getElementById('sup-inline-add-btn');
+  if(btn){btn.disabled=true;btn.textContent='Adding...';}
+  const looksLikePhone=/^[0-9+\-\s()]{6,}$/.test(val);
+  const payload=looksLikePhone?{name:val,phone:val}:{name:val};
+  const r=await fetch('/api/suppliers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const d=await r.json();
+  if(btn){btn.disabled=false;btn.textContent='+ Add';}
+  if(!d.ok){toast(d.error||'Error saving supplier','error');return;}
+  selectSupplier(d.id, val);
+  toast(`Supplier "${val}" added ✓`);
+  // Refresh list in background so other selects/tables stay in sync
+  const r2=await fetch('/api/suppliers');
+  allSuppliers=await r2.json();
+  populateSelects();
+  renderSuppliers();
+}
+
+// Enter key: pick first match, otherwise quick-add
+document.getElementById('inv-supplier-search').addEventListener('keydown',e=>{
+  if(e.key!=='Enter') return;
+  const first=document.querySelector('#sup-dropdown .sup-drop-item[data-sup-id]');
+  if(first){
+    e.preventDefault();
+    selectSupplierCached(parseInt(first.dataset.supId,10));
+  } else if(document.getElementById('sup-inline-add-btn').style.display!=='none'){
+    e.preventDefault();
+    createSupplierFromInput();
+  }
+});
+
+// Close dropdown on outside click
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.sup-search-wrap')&&!e.target.closest('.new-sup-form')){
+    document.getElementById('sup-dropdown').style.display='none';
+  }
+});
+
+function togglePurchaseSection(){
+  const sid=document.getElementById('inv-supplier-id').value;
+  document.getElementById('purchase-section').style.display=sid?'':'none';
+  if(sid){
+    const sv=document.getElementById('inv-stock').value;
+    const cv=document.getElementById('inv-cost').value;
+    if(sv) document.getElementById('pur-qty').value=sv;
+    if(cv) document.getElementById('pur-cpu').value=cv;
+    calcPurTotal();
+  }
+}
+function calcPurTotal(){
+  const q=parseFloat(document.getElementById('pur-qty').value)||0;
+  const cpu=parseFloat(document.getElementById('pur-cpu').value)||0;
+  document.getElementById('pur-total-display').textContent=C+(q*cpu).toFixed(2);
+}
+function selPP(m){
+  purMethod=m;
+  ['cash','upi','card','due'].forEach(x=>document.getElementById(`pp-${x}`).classList.toggle('sel',x===m));
+}
+
+async function adjust(id,dir){
+  const qty=parseFloat(document.getElementById(`adj-${id}`).value)||1;
+  await fetch(`/api/inventory/${id}/adjust`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({delta:dir*qty})});
+  toast(dir>0?`+${qty} added`:`-${qty} removed`); await loadAll();
+}
+
+async function openAddItem(){
+  // Refresh supplier list right before opening so manually added suppliers always show up
+  try{ const r=await fetch('/api/suppliers'); allSuppliers=await r.json(); populateSelects(); }catch(e){}
+  document.getElementById('inv-edit-id').value='';
+  ['inv-name','inv-stock','inv-thresh','inv-cost','pur-qty','pur-cpu','pur-notes','inv-stock-add','inv-stock-current'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('inv-unit').value='kg';
+  document.getElementById('inv-supplier-search').value='';
+  document.getElementById('inv-supplier-id').value='';
+  document.getElementById('sup-dropdown').style.display='none';
+  document.getElementById('new-sup-form').style.display='none';
+  document.getElementById('sup-selected').style.display='none';
+  supLastMatches=[]; updateSupAddButton([]);
+  document.getElementById('purchase-section').style.display='none';
+  document.getElementById('pur-total-display').textContent=C+'0';
+  // Show initial-stock, hide edit-stock-row (this is a new item)
+  document.getElementById('initial-stock-wrap').style.display='';
+  document.getElementById('stock-edit-row').style.display='none';
+  document.getElementById('stock-after-display').textContent='';
+  document.getElementById('inv-modal-title').textContent='Add Inventory Item';
+  selPP('cash'); OM('inv-modal');
+}
+async function editInv(id){
+  // Refresh supplier list so any newly added suppliers are available
+  try{ const r=await fetch('/api/suppliers'); allSuppliers=await r.json(); populateSelects(); }catch(e){}
+  const item=allInv.find(i=>i.id===id); if(!item) return;
+  document.getElementById('inv-edit-id').value=id;
+  document.getElementById('inv-name').value=item.name;
+  document.getElementById('inv-unit').value=item.unit;
+  // For editing: hide the "initial stock" field, show current-stock readonly + add-stock field
+  document.getElementById('inv-stock').value=item.stock; // hidden bookkeeping
+  document.getElementById('inv-stock-current').value=`${item.stock} ${item.unit}`;
+  document.getElementById('inv-stock-add').value='';
+  document.getElementById('initial-stock-wrap').style.display='none';
+  document.getElementById('stock-edit-row').style.display='';
+  document.getElementById('stock-after-display').textContent='';
+  document.getElementById('inv-thresh').value=item.low_threshold;
+  document.getElementById('inv-cost').value=item.cost_per_unit;
+  document.getElementById('inv-supplier-search').value=item.supplier_name||'';
+  document.getElementById('inv-supplier-id').value=item.supplier_id||'';
+  document.getElementById('sup-dropdown').style.display='none';
+  document.getElementById('new-sup-form').style.display='none';
+  // If editing an item that already has a supplier, show the chip; otherwise hide
+  if(item.supplier_id && item.supplier_name){
+    const chip=document.getElementById('sup-selected');
+    chip.style.display='block';
+    chip.innerHTML=`<div class="sup-selected-chip"><span>👥 <strong>${item.supplier_name}</strong></span><button type="button" onclick="clearSelectedSupplier()" title="Remove">✕</button></div>`;
+  } else {
+    document.getElementById('sup-selected').style.display='none';
+  }
+  supLastMatches=[]; updateSupAddButton([]);
+  document.getElementById('purchase-section').style.display='none';
+  ['pur-qty','pur-cpu','pur-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('pur-total-display').textContent=C+'0';
+  document.getElementById('inv-modal-title').textContent='Edit Item';
+  selPP('cash'); OM('inv-modal');
+}
+async function saveInv(){
+  const id=document.getElementById('inv-edit-id').value;
+  const name=document.getElementById('inv-name').value.trim();
+  if(!name){toast('Enter item name','error');return;}
+
+  const sid=document.getElementById('inv-supplier-id').value;
+  const addStock=parseFloat(document.getElementById('inv-stock-add').value)||0;
+  let purQty=parseFloat(document.getElementById('pur-qty').value)||0;
+  // Edit mode: if user typed Add Stock but did not fill the purchase section,
+  // treat addStock as the purchase qty (so we record a purchase, /purchase will increment stock)
+  const editAddStockUsesPurchase = (id && addStock>0 && purQty===0 && sid);
+  if(editAddStockUsesPurchase) purQty=addStock;
+  const willRecordPurchase = !!(sid && purQty>0);
+
+  // Determine stock value to save:
+  let stockValue;
+  if(id){
+    // EDIT mode
+    const currentStock=parseFloat((allInv.find(i=>i.id==id)||{}).stock||0);
+    if(editAddStockUsesPurchase){
+      // /purchase will add purQty (=addStock) back, so save current as-is
+      stockValue=currentStock;
+    } else if(addStock>0){
+      // No supplier selected — just add the stock manually
+      stockValue=currentStock+addStock;
+    } else {
+      // Plain edit (no stock change)
+      stockValue=currentStock;
+    }
+  } else {
+    // NEW item — preserve original behavior: save Initial Stock as typed.
+    // If user fills both Initial Stock + Quantity Purchased, /purchase will further add purQty.
+    // (This matches the original app behavior.)
+    stockValue=parseFloat(document.getElementById('inv-stock').value)||0;
+  }
+
+  const data={name,
+    unit:document.getElementById('inv-unit').value,
+    stock:stockValue,
+    low_threshold:parseFloat(document.getElementById('inv-thresh').value)||5,
+    cost:parseFloat(document.getElementById('inv-cost').value)||0,
+    supplier_id:sid||null};
+  const url=id?`/api/inventory/${id}`:'/api/inventory';
+  const saveResp=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json());
+  if(!saveResp.ok){toast(saveResp.error||'Error saving','error');return;}
+  CM('inv-modal'); toast(id?(addStock>0?`Stock +${addStock} added ✓`:'Updated'):'Item added');
+
+  const savedId=saveResp.id||id;
+  (async()=>{
+    if(willRecordPurchase&&savedId){
+      let cpu=parseFloat(document.getElementById('pur-cpu').value)||0;
+      if(!cpu) cpu=parseFloat(document.getElementById('inv-cost').value)||0;
+      await fetch(`/api/inventory/${savedId}/purchase`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quantity:purQty,cost_per_unit:cpu,supplier_id:sid,payment_method:purMethod,is_due:purMethod==='due',notes:document.getElementById('pur-notes').value})});
+    }
+    await loadAll();
+  })();
+}
+
+// Live preview of "stock after adding"
+function syncAddStockToPurchase(){
+  const id=document.getElementById('inv-edit-id').value;
+  if(!id) return;
+  const item=allInv.find(i=>i.id==id); if(!item) return;
+  const add=parseFloat(document.getElementById('inv-stock-add').value)||0;
+  const after=(parseFloat(item.stock)||0)+add;
+  document.getElementById('stock-after-display').textContent = add>0
+    ? `New stock will be: ${after} ${item.unit}`
+    : '';
+  // If supplier picked, mirror into purchase qty so user doesn't have to re-enter
+  const sid=document.getElementById('inv-supplier-id').value;
+  if(sid && add>0){
+    const purQty=document.getElementById('pur-qty');
+    if(!purQty.value || parseFloat(purQty.value)===0) purQty.value=add;
+    calcPurTotal();
+  }
+}
+async function delInv(id,name){
+  if(!confirm(`Delete "${name}"?`)) return;
+  await fetch(`/api/inventory/${id}`,{method:'DELETE'}); toast('Deleted'); await loadAll();
+}
+
+// SUPPLIERS
+function renderSuppliers(){
+  const el=document.getElementById('suppliers-list');
+  if(!allSuppliers.length){el.innerHTML='<div style="color:var(--text3);font-size:13px;text-align:center;padding:40px">No suppliers. Click + Add Supplier.</div>';return;}
+  el.innerHTML=`<div style="overflow-x:auto"><table class="inv-table"><thead><tr><th>Name</th><th>Phone</th><th>Total Purchased</th><th>We Owe</th><th>Actions</th></tr></thead>
+    <tbody>${allSuppliers.map(s=>`<tr>
+      <td style="font-weight:600">${s.name}</td><td style="color:var(--text2)">${s.phone||'—'}</td>
+      <td class="mono">${C}${Math.round(s.total_purchased)}</td>
+      <td class="mono" style="color:${s.due_amount>0?'var(--red)':'var(--green)'};font-weight:${s.due_amount>0?700:400}">${C}${s.due_amount.toFixed(2)}</td>
+      <td><div style="display:flex;gap:5px">
+        <button class="btn btn-ghost btn-sm" onclick="viewSupplier(${s.id})">View</button>
+        <button class="btn btn-ghost btn-sm" onclick="editSupplier(${s.id})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="delSupplier(${s.id},'${s.name.replace(/'/g,"\\'")}')">Del</button>
+      </div></td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+async function viewSupplier(sid){
+  const r=await fetch(`/api/suppliers/${sid}`);const d=await r.json();const s=d.supplier;
+  document.getElementById('sd-title').textContent=s.name;
+  document.getElementById('sd-body').innerHTML=`
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px">
+      <div><div style="font-size:11px;color:var(--text2);font-weight:600">Phone</div><div style="font-size:13px;font-weight:600">${s.phone||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--text2);font-weight:600">Total Purchased</div><div style="font-size:16px;font-weight:800;color:var(--blue)">${C}${Math.round(s.total_purchased)}</div></div>
+      <div><div style="font-size:11px;color:var(--text2);font-weight:600">We Owe</div><div style="font-size:18px;font-weight:800;color:${s.due_amount>0?'var(--red)':'var(--green)'}">${C}${s.due_amount.toFixed(2)}</div></div>
+    </div>
+    ${s.due_amount>0?`<div style="display:flex;gap:8px;margin-bottom:14px"><input type="number" id="sup-pay-amt" placeholder="Amount to pay" style="flex:1" value="${s.due_amount.toFixed(2)}"><button class="btn btn-green" onclick="paySupDue(${s.id})">✓ Pay Due</button></div>`:''}
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Recent Purchases</div>
+    <div style="overflow-x:auto;max-height:250px;overflow-y:auto">
+      <table class="inv-table"><thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Total</th><th>Payment</th></tr></thead>
+      <tbody>${d.purchases.length?d.purchases.map(p=>`<tr>
+        <td style="font-size:11px;color:var(--text3)">${p.purchased_at.split(' ')[0]}</td>
+        <td style="font-size:12px">${p.item_name||'—'}</td>
+        <td class="mono">${p.quantity}</td>
+        <td class="mono">${C}${p.total_cost}</td>
+        <td><span class="badge ${p.is_due?'badge-red':'badge-green'}">${p.is_due?'Due':p.payment_method}</span></td>
+      </tr>`).join(''):'<tr><td colspan="5" style="color:var(--text3)">No purchases</td></tr>'}</tbody></table>
+    </div>`;
+  OM('sup-detail-modal');
+}
+async function paySupDue(sid){
+  const amt=parseFloat(document.getElementById('sup-pay-amt').value)||0;
+  if(!amt){toast('Enter amount','error');return;}
+  await fetch(`/api/suppliers/${sid}/pay_due`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt})});
+  CM('sup-detail-modal');toast('Payment recorded');await loadAll();
+}
+function editSupplier(id){
+  const s=allSuppliers.find(x=>x.id===id);if(!s) return;
+  document.getElementById('sup-edit-id').value=id;
+  document.getElementById('sup-name').value=s.name;
+  document.getElementById('sup-phone').value=s.phone||'';
+  document.getElementById('sup-email').value=s.email||'';
+  document.getElementById('sup-addr').value=s.address||'';
+  document.getElementById('sup-notes').value=s.notes||'';
+  document.getElementById('sup-modal-title').textContent='Edit Supplier';
+  OM('sup-modal');
+}
+async function saveSupplier(){
+  const id=document.getElementById('sup-edit-id').value;
+  const data={name:document.getElementById('sup-name').value.trim(),phone:document.getElementById('sup-phone').value,email:document.getElementById('sup-email').value,address:document.getElementById('sup-addr').value,notes:document.getElementById('sup-notes').value};
+  if(!data.name){toast('Enter name','error');return;}
+  await fetch(id?`/api/suppliers/${id}`:'/api/suppliers',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  CM('sup-modal');document.getElementById('sup-edit-id').value='';document.getElementById('sup-modal-title').textContent='Add Supplier';
+  toast(id?'Updated':'Supplier added');await loadAll();
+}
+async function delSupplier(id,name){
+  if(!confirm(`Delete "${name}"?`)) return;
+  await fetch(`/api/suppliers/${id}`,{method:'DELETE'});toast('Deleted');await loadAll();
+}
+async function loadPurchases(){
+  const sid=document.getElementById('pur-sup').value,from=document.getElementById('pur-from').value,to=document.getElementById('pur-to').value;
+  const r=await fetch(`/api/suppliers/report?supplier_id=${sid}&start=${from}&end=${to}`);
+  const d=await r.json();
+  document.getElementById('pur-summary').innerHTML=`
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 13px;font-size:12px">Total: <strong>${C}${d.total.t.toFixed(2)}</strong></div>
+    <div style="background:var(--red-bg);border:1px solid #fca5a5;border-radius:8px;padding:9px 13px;font-size:12px;color:var(--red)">Due: <strong>${C}${d.total.due.toFixed(2)}</strong></div>`;
+  document.getElementById('pur-tbody').innerHTML=d.purchases.length?
+    d.purchases.map(p=>`<tr><td style="font-size:11px;color:var(--text3)">${p.purchased_at.split(' ')[0]}</td><td style="font-size:12px">${p.supplier_name||'—'}</td><td style="font-size:12px;font-weight:500">${p.item_name||'—'}</td><td class="mono">${p.quantity}</td><td class="mono">${C}${p.cost_per_unit}</td><td class="mono">${C}${p.total_cost}</td><td>${p.payment_method}</td><td><span class="badge ${p.is_due?'badge-red':'badge-green'}">${p.is_due?'Yes':'No'}</span></td></tr>`).join(''):
+    '<tr><td colspan="8" style="color:var(--text3);text-align:center;padding:20px">No purchases found</td></tr>';
+}
+function exportPurchases(){window.open(`/api/suppliers/export?supplier_id=${document.getElementById('pur-sup').value}&start=${document.getElementById('pur-from').value}&end=${document.getElementById('pur-to').value}`);}
+function switchView(v){
+  ['inventory','suppliers','purchases'].forEach(x=>{
+    document.getElementById(`view-${x}`).style.display=x===v?'':'none';
+    const tab=document.getElementById(`tab-${x}`);
+    tab.style.color=x===v?'var(--accent)':'var(--text2)';
+    tab.style.borderBottom=x===v?'2px solid var(--accent)':'2px solid transparent';
+  });
+  if(v==='purchases') loadPurchases();
+}
+function OM(id){document.getElementById(id).classList.add('show');}
+function CM(id){document.getElementById(id).classList.remove('show');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');}));
+function onRealtimeUpdate(d){
+  if(['inventory_updated','supplier_updated'].includes(d.type)) loadAll();
+}
+function localDate(d){d=d||new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+const today=localDate();
+document.getElementById('pur-from').value=localDate(new Date(Date.now()-30*86400000));
+document.getElementById('pur-to').value=today;
+loadAll();
+</script>
+{% endblock %}
