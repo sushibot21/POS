@@ -225,6 +225,10 @@
                 </div>
               </div>
             </div>
+            <div>
+              <label>Table <span style="font-weight:400;color:var(--text3)">(optional — for guests ordering packed food)</span></label>
+              <select id="tw-table"><option value="">— No table (regular takeaway) —</option></select>
+            </div>
             <div><label>Notes</label><input type="text" id="tw-notes" placeholder="Special instructions..."></div>
             <button class="btn btn-primary btn-lg" onclick="createTakeaway()" style="width:100%;justify-content:center">Start Order →</button>
           </div>
@@ -491,7 +495,9 @@ async function selTable(tid,eid,tnum){
   if(eid){curOid=eid;setOpHeader(`Table ${tnum}`,`Order #${eid}`);await loadItems();}
   else{
     const r=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_type:'dine_in',table_id:tid})});
-    const d=await r.json();curOid=d.order_id;
+    const d=await r.json();
+    if(!d.ok&&d.error){toast(d.error,'error');await loadTables();return;}
+    curOid=d.order_id;
     setOpHeader(`Table ${tnum}`,`Order #${d.order_id}`);emptyPanel();toast(`Table ${tnum}: new order`);
   }
   isDeliveryOrder=false;
@@ -580,11 +586,16 @@ async function createTakeaway(){
   const name=document.getElementById('tw-name').value.trim();
   if(!name&&!isDelivery){toast('Enter customer name','error');return;}
   const finalName=isDelivery?(src.charAt(0).toUpperCase()+src.slice(1)):name;
-  const r=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_type:'takeaway',customer_name:finalName,customer_id:twCustId||null,notes:document.getElementById('tw-notes').value,source:src})});
-  const d=await r.json();curOid=d.order_id;
+  const tblSel=document.getElementById('tw-table');
+  const tid=tblSel&&tblSel.value?parseInt(tblSel.value):null;
+  const tblLabel=tid?(tblSel.options[tblSel.selectedIndex].textContent.trim()):'';
+  const r=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_type:'takeaway',table_id:tid,customer_name:finalName,customer_id:twCustId||null,notes:document.getElementById('tw-notes').value,source:src})});
+  const d=await r.json();
+  if(!d.ok&&d.error){toast(d.error,'error');return;}
+  curOid=d.order_id;
   if(twCustId){curCustId=twCustId;curCustName=finalName;}
   isDeliveryOrder=isDelivery;
-  setOpHeader(`🥡 ${finalName}`,`Order #${d.order_id} · ${src.toUpperCase()}`);
+  setOpHeader(`🥡 ${finalName}${tblLabel?` · ${tblLabel}`:''}`,`Order #${d.order_id} · ${src.toUpperCase()}`);
   if(isDelivery){
     curCustName=finalName;
     document.getElementById('cust-search-input').value=finalName;
@@ -968,7 +979,19 @@ function switchTab(tab){
     document.getElementById(`tab-${t}`).classList.toggle('active',t===tab);
   });
   if(tab==='orders') loadOpenOrders();
+  if(tab==='takeaway') loadTwTables();
   if(tab==='menu'&&!curOid) document.getElementById('no-order-warn').style.display='';
+}
+
+async function loadTwTables(){
+  const sel=document.getElementById('tw-table'); if(!sel) return;
+  const prev=sel.value;
+  try{
+    const tables=await (await fetch('/api/tables')).json();
+    sel.innerHTML='<option value="">— No table (regular takeaway) —</option>'+
+      tables.map(t=>`<option value="${t.id}">Table ${t.number}${t.section&&t.section!=='Main'?' · '+t.section:''}</option>`).join('');
+    if(prev) sel.value=prev;
+  }catch(e){}
 }
 function OM(id){document.getElementById(id).classList.add('show');}
 function CM(id){document.getElementById(id).classList.remove('show');}

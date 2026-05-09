@@ -971,11 +971,22 @@ def pay_due(cid):
 @login_required
 def create_order():
     d=request.json; conn=get_db()
+    order_type=d.get('order_type','dine_in')
+    table_id=d.get('table_id')
+    # Block multiple open dine-in orders on the same table — bill must be closed first.
+    # Takeaway orders linked to a table do NOT block (e.g. seated guests ordering packed food).
+    if order_type=='dine_in' and table_id:
+        existing=conn.execute("SELECT id FROM orders WHERE table_id=? AND order_type='dine_in' AND status='open' LIMIT 1",(table_id,)).fetchone()
+        if existing:
+            conn.close()
+            return jsonify({'ok':False,'error':f"Table already has an open order (#{existing['id']}). Close that bill before opening a new one."}), 409
     cur=conn.execute('INSERT INTO orders(order_type,table_id,customer_id,customer_name,notes,source) VALUES(?,?,?,?,?,?)',
-        (d.get('order_type','dine_in'),d.get('table_id'),d.get('customer_id'),d.get('customer_name',''),d.get('notes',''),d.get('source','pos')))
+        (order_type,table_id,d.get('customer_id'),d.get('customer_name',''),d.get('notes',''),d.get('source','pos')))
     oid=cur.lastrowid
-    if d.get('table_id'): conn.execute("UPDATE tables SET status='occupied' WHERE id=?",(d['table_id'],))
-    conn.commit(); conn.close(); broadcast('order_created',{'order_id':oid}); return jsonify({'order_id':oid})
+    # Only dine-in occupies the table; takeaway-with-table is just a metadata link.
+    if order_type=='dine_in' and table_id:
+        conn.execute("UPDATE tables SET status='occupied' WHERE id=?",(table_id,))
+    conn.commit(); conn.close(); broadcast('order_created',{'order_id':oid}); return jsonify({'ok':True,'order_id':oid})
 
 @app.route('/api/order/<int:oid>')
 @login_required
@@ -1040,7 +1051,9 @@ def close_order(oid):
         closed_at=datetime('now','localtime'),customer_id=?,customer_name=? WHERE id=?""",
         (method,subtype,is_due,cid,d.get('customer_name',''),oid))
     order=conn.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
-    if order['table_id']: conn.execute("UPDATE tables SET status='free' WHERE id=?",(order['table_id'],))
+    # Only dine-in orders occupy a table; takeaway-with-table is just metadata, don't free a table that's still hosting another dine-in.
+    if order['table_id'] and order['order_type']=='dine_in':
+        conn.execute("UPDATE tables SET status='free' WHERE id=?",(order['table_id'],))
     if cid:
         conn.execute('UPDATE customers SET visit_count=visit_count+1,total_spent=total_spent+? WHERE id=?',(order['total'],cid))
         if is_due: conn.execute('UPDATE customers SET due_amount=due_amount+? WHERE id=?',(order['total'],cid))
