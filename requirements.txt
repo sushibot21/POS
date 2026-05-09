@@ -2,5 +2,6 @@ flask>=3.0.0
 flask-socketio>=5.3.6
 werkzeug>=3.0.0
 gunicorn>=21.2.0
-eventlet>=0.36.1
+gevent>=23.7.0
+gevent-websocket>=0.10.1
 libsql-experimental>=0.0.40
