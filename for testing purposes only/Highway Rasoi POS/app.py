@@ -974,7 +974,7 @@ def create_order():
     cur=conn.execute('INSERT INTO orders(order_type,table_id,customer_id,customer_name,notes,source) VALUES(?,?,?,?,?,?)',
         (d.get('order_type','dine_in'),d.get('table_id'),d.get('customer_id'),d.get('customer_name',''),d.get('notes',''),d.get('source','pos')))
     oid=cur.lastrowid
-    if d.get('table_id'): conn.execute('UPDATE tables SET status="occupied" WHERE id=?',(d['table_id'],))
+    if d.get('table_id'): conn.execute("UPDATE tables SET status='occupied' WHERE id=?",(d['table_id'],))
     conn.commit(); conn.close(); broadcast('order_created',{'order_id':oid}); return jsonify({'order_id':oid})
 
 @app.route('/api/order/<int:oid>')
@@ -1040,7 +1040,7 @@ def close_order(oid):
         closed_at=datetime('now','localtime'),customer_id=?,customer_name=? WHERE id=?""",
         (method,subtype,is_due,cid,d.get('customer_name',''),oid))
     order=conn.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
-    if order['table_id']: conn.execute('UPDATE tables SET status="free" WHERE id=?',(order['table_id'],))
+    if order['table_id']: conn.execute("UPDATE tables SET status='free' WHERE id=?",(order['table_id'],))
     if cid:
         conn.execute('UPDATE customers SET visit_count=visit_count+1,total_spent=total_spent+? WHERE id=?',(order['total'],cid))
         if is_due: conn.execute('UPDATE customers SET due_amount=due_amount+? WHERE id=?',(order['total'],cid))
