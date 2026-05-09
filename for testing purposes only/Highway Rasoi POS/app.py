@@ -345,8 +345,12 @@ def init_db():
             price_per_night REAL DEFAULT 0,
             total_amount REAL DEFAULT 0,
             payment_method TEXT DEFAULT 'cash',
+            payment_subtype TEXT DEFAULT '',
             status TEXT DEFAULT 'checked_in',
             notes TEXT DEFAULT '',
+            customer_id INTEGER,
+            is_due INTEGER DEFAULT 0,
+            amount_paid REAL DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now','localtime')),
             checked_out_at TEXT DEFAULT ''
         );
@@ -387,6 +391,20 @@ def init_db():
             cols = [r[1] for r in c.execute(f'PRAGMA table_info({table})').fetchall()]
             if col not in cols: c.execute(sql)
         except: pass
+
+    # Hotel_bookings migrations — done with try-SELECT-except-ALTER rather than
+    # PRAGMA, so they work on backends where PRAGMA introspection is unreliable
+    # (notably Turso libsql over HTTP).
+    for col, sql in [
+        ('customer_id',     "ALTER TABLE hotel_bookings ADD COLUMN customer_id INTEGER"),
+        ('is_due',          "ALTER TABLE hotel_bookings ADD COLUMN is_due INTEGER DEFAULT 0"),
+        ('payment_subtype', "ALTER TABLE hotel_bookings ADD COLUMN payment_subtype TEXT DEFAULT ''"),
+        ('amount_paid',     "ALTER TABLE hotel_bookings ADD COLUMN amount_paid REAL DEFAULT 0"),
+    ]:
+        try: c.execute(f'SELECT {col} FROM hotel_bookings LIMIT 1')
+        except:
+            try: c.execute(sql)
+            except: pass
 
     # Default settings
     defaults = [
@@ -1213,32 +1231,107 @@ def checkin_room(rid):
     except Exception:
         nights = 1
     total = nights * price
+    payment_method = d.get('payment_method', 'cash')
+    is_due = 1 if payment_method == 'due' else 0
+    customer_id = d.get('customer_id') or None
+    amount_paid = 0.0 if is_due else total  # paid up-front unless 'due'
     # Future check-in => reserved; today/past => occupied (matches the modal copy)
     room_status = 'reserved' if checkin > today_iso else 'occupied'
     booking_status = 'reserved' if room_status == 'reserved' else 'checked_in'
-    conn.execute("""INSERT INTO hotel_bookings(room_id, room_number, guest_name, phone,
+    cur = conn.execute("""INSERT INTO hotel_bookings(room_id, room_number, guest_name, phone,
                         checkin_date, checkout_date, nights, price_per_night, total_amount,
-                        payment_method, status, notes)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        payment_method, status, notes, customer_id, is_due, amount_paid)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                  (rid, room['room_number'], guest, phone, checkin, checkout, nights, price, total,
-                  d.get('payment_method', 'cash'), booking_status, d.get('notes', '')))
+                  payment_method, booking_status, d.get('notes', ''), customer_id, is_due, amount_paid))
+    booking_id = cur.lastrowid
     conn.execute("UPDATE hotel_rooms SET status=?, current_guest=?, checkin_date=?, checkout_date=? WHERE id=?",
                  (room_status, guest, checkin, checkout, rid))
+    # Reflect on the customer record so the Customers tab shows due / total spent.
+    if customer_id:
+        if is_due:
+            conn.execute('UPDATE customers SET due_amount=due_amount+? WHERE id=?', (total, customer_id))
+        else:
+            conn.execute('UPDATE customers SET total_spent=total_spent+?, visit_count=visit_count+1 WHERE id=?', (total, customer_id))
     conn.commit(); conn.close()
     broadcast('hotel_updated', {'room_id': rid})
-    return jsonify({'ok': True})
+    if customer_id: broadcast('customer_updated', {'customer_id': customer_id})
+    return jsonify({'ok': True, 'booking_id': booking_id})
 
 @app.route('/api/hotel/rooms/<int:rid>/checkout', methods=['POST'])
 @login_required
 def checkout_room(rid):
+    """Close out the active booking on a room. Optional body fields settle final
+    billing — payment_method, payment_subtype, amount_paid. If the booking was
+    'due' and payment is collected here, the customer's outstanding due is
+    reduced by amount_paid."""
+    d = request.json or {}
     conn = get_db()
-    conn.execute("""UPDATE hotel_bookings
-                    SET status='checked_out', checked_out_at=datetime('now','localtime')
-                    WHERE room_id=? AND status IN ('checked_in','reserved')""", (rid,))
+    booking = conn.execute("""SELECT * FROM hotel_bookings WHERE room_id=? AND status IN ('checked_in','reserved')
+                              ORDER BY id DESC LIMIT 1""", (rid,)).fetchone()
+    cust_id = None
+    if booking:
+        bid = booking['id']
+        was_due = bool(booking['is_due'])
+        cust_id = booking['customer_id']
+        total = float(booking['total_amount'] or 0)
+        prev_paid = float(booking['amount_paid'] or 0)
+        method = d.get('payment_method') or booking['payment_method']
+        subtype = d.get('payment_subtype', '') or (booking['payment_subtype'] if booking['payment_subtype'] else '')
+        # If amount_paid was sent, treat it as the additional payment collected at checkout.
+        # If not sent, default behavior: settle whatever's still owed.
+        if 'amount_paid' in d:
+            paid_now = max(0.0, float(d.get('amount_paid') or 0))
+        else:
+            paid_now = max(0.0, total - prev_paid) if was_due else 0.0
+        new_total_paid = prev_paid + paid_now
+        still_due = max(0.0, total - new_total_paid)
+        new_is_due = 1 if still_due > 0.0001 else 0
+        conn.execute("""UPDATE hotel_bookings
+                        SET status='checked_out', checked_out_at=datetime('now','localtime'),
+                            payment_method=?, payment_subtype=?, amount_paid=?, is_due=?
+                        WHERE id=?""",
+                     (method, subtype, new_total_paid, new_is_due, bid))
+        # Update the customer's running totals
+        if cust_id and paid_now > 0:
+            conn.execute('UPDATE customers SET due_amount=MAX(0, due_amount-?), total_spent=total_spent+? WHERE id=?',
+                         (paid_now, paid_now, cust_id))
+            if was_due and not new_is_due:
+                # First proper payment for this booking — count the visit
+                conn.execute('UPDATE customers SET visit_count=visit_count+1 WHERE id=?', (cust_id,))
+        log_action('hotel_checkout','hotel', f"Room {booking['room_number']} bk#{bid} paid={paid_now} method={method}", conn=conn)
     conn.execute("UPDATE hotel_rooms SET status='available', current_guest='', checkin_date='', checkout_date='' WHERE id=?", (rid,))
     conn.commit(); conn.close()
     broadcast('hotel_updated', {'room_id': rid})
+    if cust_id: broadcast('customer_updated', {'customer_id': cust_id})
     return jsonify({'ok': True})
+
+@app.route('/api/hotel/rooms/<int:rid>/bill')
+@login_required
+def hotel_room_bill(rid):
+    """Bill data for the active booking on this room (or the most recent one)."""
+    conn = get_db()
+    booking = conn.execute("""SELECT * FROM hotel_bookings WHERE room_id=?
+                              ORDER BY (status='checked_out') ASC, id DESC LIMIT 1""", (rid,)).fetchone()
+    if not booking:
+        conn.close(); return jsonify({'error': 'No booking found for this room'}), 404
+    customer = None
+    if booking['customer_id']:
+        c = conn.execute('SELECT id,name,phone,email,due_amount FROM customers WHERE id=?', (booking['customer_id'],)).fetchone()
+        if c: customer = dict(c)
+    s = get_all_settings()
+    conn.close()
+    return jsonify({
+        'booking': dict(booking),
+        'customer': customer,
+        'restaurant': s.get('restaurant_name', 'Hotel'),
+        'gstin': s.get('gstin', ''),
+        'currency': s.get('currency', '₹'),
+        'logo_url': s.get('logo_url', ''),
+        'upi_id': s.get('upi_id', ''),
+        'upi_qr_url': s.get('upi_qr_url', ''),
+        'time': datetime.now().strftime('%d %b %Y, %I:%M %p'),
+    })
 
 @app.route('/api/hotel/calendar')
 @login_required

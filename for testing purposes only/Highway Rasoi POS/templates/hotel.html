@@ -276,6 +276,26 @@
     <div id="rd-body"></div>
   </div>
 </div>
+
+<!-- HOTEL BILL MODAL -->
+<div class="modal-overlay" id="hotel-bill-modal">
+  <div class="modal" style="min-width:340px;max-width:380px">
+    <div class="modal-header"><div class="modal-title">Hotel Bill</div><button class="modal-close" onclick="CM('hotel-bill-modal')">✕</button></div>
+    <div id="hotel-bill-body"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="printHotelBill()">🖨 Print</button>
+      <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="CM('hotel-bill-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHECKOUT MODAL -->
+<div class="modal-overlay" id="checkout-modal">
+  <div class="modal" style="min-width:380px">
+    <div class="modal-header"><div class="modal-title">Check Out — Room <span id="co-room-num">?</span></div><button class="modal-close" onclick="CM('checkout-modal')">✕</button></div>
+    <div id="co-body"></div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -444,6 +464,7 @@ function renderRoomCard(r){
     <div class="room-price">${C}${r.price_per_night}/night</div>
     <div class="room-actions" onclick="event.stopPropagation()">
       ${r.status==='available'?`<button class="btn btn-primary btn-sm" onclick="openCheckin(${r.id},'${r.room_number}',${r.price_per_night})">Book</button>`:''}
+      ${r.status==='occupied'||r.status==='reserved'?`<button class="btn btn-ghost btn-sm" onclick="openHotelBill(${r.id})">🖨 Bill</button>`:''}
       ${r.status==='occupied'||r.status==='reserved'?`<button class="btn btn-danger btn-sm" onclick="doCheckout(${r.id})">Check Out</button>`:''}
       <button class="btn btn-ghost btn-sm" onclick="editRoom(${r.id})">Edit</button>
       <button class="btn btn-danger btn-sm" onclick="delRoom(${r.id},'${r.room_number}')">✕</button>
@@ -469,6 +490,7 @@ function openRoomDetail(rid){
     </div>
     <div style="display:flex;gap:8px">
       ${r.status==='available'?`<button class="btn btn-primary" style="flex:1;justify-content:center" onclick="CM('room-detail-modal');openCheckin(${r.id},'${r.room_number}',${r.price_per_night})">Book Room</button>`:''}
+      ${r.status==='occupied'||r.status==='reserved'?`<button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="CM('room-detail-modal');openHotelBill(${r.id})">🖨 Bill</button>`:''}
       ${r.status==='occupied'||r.status==='reserved'?`<button class="btn btn-danger" style="flex:1;justify-content:center" onclick="CM('room-detail-modal');doCheckout(${r.id})">Check Out</button>`:''}
       <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="CM('room-detail-modal');editRoom(${r.id})">Edit</button>
     </div>`;
@@ -599,6 +621,7 @@ async function doCheckin(){
   const rid=document.getElementById('ci-room-id').value;
   await fetch(`/api/hotel/rooms/${rid}/checkin`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     guest,phone:document.getElementById('ci-phone').value,
+    customer_id:custId||null,
     checkin:document.getElementById('ci-in').value,
     checkout:document.getElementById('ci-out').value,
     price_per_night:parseFloat(document.getElementById('ci-price').value)||0,
@@ -608,9 +631,134 @@ async function doCheckin(){
   CM('checkin-modal');toast('Booking confirmed ✓');await load();
 }
 async function doCheckout(rid){
-  if(!confirm('Check out guest?')) return;
-  await fetch(`/api/hotel/rooms/${rid}/checkout`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
-  toast('Checked out ✓');await load();
+  // Open the checkout modal with the bill summary + payment-collection form
+  let d;
+  try{
+    const r=await fetch(`/api/hotel/rooms/${rid}/bill`);
+    if(!r.ok){
+      if(!confirm('No booking record found. Mark room as available?')) return;
+      await fetch(`/api/hotel/rooms/${rid}/checkout`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+      toast('Checked out');await load();return;
+    }
+    d=await r.json();
+  }catch(e){toast('Could not load booking','error');return;}
+  const b=d.booking;
+  const due=Math.max(0,(b.total_amount||0)-(b.amount_paid||0));
+  document.getElementById('co-room-num').textContent=b.room_number;
+  document.getElementById('co-body').innerHTML=`
+    <div style="display:grid;gap:10px">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px">${b.guest_name}${b.phone?` · ${b.phone}`:''}</div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2)"><span>${b.nights} nights × ${C}${b.price_per_night}</span><span>${C}${(b.total_amount||0).toFixed(0)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2)"><span>Already paid</span><span>${C}${(b.amount_paid||0).toFixed(0)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:800;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)"><span>Outstanding</span><span style="color:${due>0?'var(--red)':'var(--green)'}">${C}${due.toFixed(0)}</span></div>
+      </div>
+      ${due>0?`
+        <div>
+          <label>Amount collecting now</label>
+          <input type="number" id="co-paid" value="${due.toFixed(0)}" min="0" max="${due.toFixed(2)}" step="0.01">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">Set to 0 to keep the balance as Due. Less than full = partial payment, balance stays Due.</div>
+        </div>
+        <div>
+          <label>Payment Method</label>
+          <select id="co-method"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="due">Keep as Due</option></select>
+        </div>
+      `:`
+        <input type="hidden" id="co-paid" value="0">
+        <input type="hidden" id="co-method" value="${b.payment_method||'cash'}">
+        <div style="background:var(--green-bg);border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:var(--green)">✓ Bill is fully paid. Just confirm to free the room.</div>
+      `}
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="CM('checkout-modal');openHotelBill(${rid})">🖨 View Bill</button>
+        <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="confirmCheckout(${rid})">Confirm Checkout</button>
+      </div>
+    </div>`;
+  OM('checkout-modal');
+}
+async function confirmCheckout(rid){
+  const paidEl=document.getElementById('co-paid');
+  const methodEl=document.getElementById('co-method');
+  const paid=parseFloat(paidEl?paidEl.value:0)||0;
+  const method=methodEl?methodEl.value:'cash';
+  const r=await fetch(`/api/hotel/rooms/${rid}/checkout`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount_paid:paid,payment_method:method})});
+  const d=await r.json();
+  if(!d.ok){toast(d.error||'Checkout failed','error');return;}
+  CM('checkout-modal');toast('Checked out ✓');await load();
+}
+
+async function openHotelBill(rid){
+  let d;
+  try{
+    const r=await fetch(`/api/hotel/rooms/${rid}/bill`);
+    if(!r.ok){toast('No booking to bill','error');return;}
+    d=await r.json();
+  }catch(e){toast('Could not load bill','error');return;}
+  const b=d.booking;
+  const due=Math.max(0,(b.total_amount||0)-(b.amount_paid||0));
+  document.getElementById('hotel-bill-body').innerHTML=`<div class="print-doc">
+    ${d.logo_url?`<img src="${d.logo_url}" style="width:55px;height:55px;object-fit:cover;border-radius:8px;display:block;margin:0 auto 6px">`:''}
+    <h2>${d.restaurant}</h2><div class="sub">HOTEL INVOICE</div>
+    ${d.gstin?`<div class="sub">GSTIN: ${d.gstin}</div>`:''}
+    <div class="divider"></div>
+    <div>Bill #${b.id} | ${d.time}</div>
+    <div>Room ${b.room_number} · ${b.guest_name}</div>
+    ${b.phone?`<div>Phone: ${b.phone}</div>`:''}
+    <div class="divider"></div>
+    <table>
+      <tr><td>Check-in</td><td class="r">${b.checkin_date||'—'}</td></tr>
+      <tr><td>Check-out</td><td class="r">${b.checkout_date||'—'}</td></tr>
+      <tr><td>Nights</td><td class="r">${b.nights}</td></tr>
+      <tr><td>Per night</td><td class="r">${d.currency}${(b.price_per_night||0).toFixed(0)}</td></tr>
+    </table>
+    <div class="divider"></div>
+    <table>
+      <tr><td class="bold">TOTAL</td><td class="r bold">${d.currency}${(b.total_amount||0).toFixed(2)}</td></tr>
+      <tr><td>Paid</td><td class="r">${d.currency}${(b.amount_paid||0).toFixed(2)}</td></tr>
+      ${due>0?`<tr><td class="bold">DUE</td><td class="r bold">${d.currency}${due.toFixed(2)}</td></tr>`:''}
+      <tr><td style="color:#555">Method</td><td class="r" style="color:#555">${b.payment_method||'cash'}${b.payment_subtype?` (${b.payment_subtype})`:''}</td></tr>
+    </table>
+    ${b.notes?`<div class="divider"></div><div style="font-size:10px">${b.notes}</div>`:''}
+    <div class="divider"></div>
+    ${d.upi_qr_url?`<div class="qr-block"><img src="${d.upi_qr_url}" style="width:90px;height:90px;display:block;margin:6px auto 3px"><div class="center" style="font-size:10px">Scan · ${d.upi_id}</div></div>`:(d.upi_id?`<div class="center">UPI: ${d.upi_id}</div>`:'')}
+    <div class="center" style="margin-top:6px">Thank you for staying! 🙏</div>
+  </div>`;
+  OM('hotel-bill-modal');
+}
+
+function printHotelBill(){
+  const node=document.querySelector('#hotel-bill-modal .print-doc');
+  if(!node){toast('Nothing to print','error');return;}
+  const f=document.createElement('iframe');
+  f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(f);
+  const doc=f.contentDocument||f.contentWindow.document;
+  doc.open();
+  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>
+    @page{margin:6mm;}
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
+    html,body{margin:0;padding:0;background:#fff;color:#000;font-family:'Courier New',monospace;font-size:12px;}
+    .print-doc{max-width:300px;margin:0 auto;padding:6px;background:#fff;color:#000;}
+    .print-doc *{color:#000;background:#fff;}
+    .print-doc h2{font-size:15px;font-weight:900;text-align:center;margin:0 0 2px;}
+    .print-doc .sub{text-align:center;font-size:11px;}
+    .print-doc .divider{border-top:1px dashed #000;margin:7px 0;}
+    .print-doc table{width:100%;border-collapse:collapse;}
+    .print-doc td{padding:2px 0;vertical-align:top;}
+    .print-doc .r{text-align:right;}
+    .print-doc .bold{font-weight:900;}
+    .print-doc .center{text-align:center;}
+    .qr-block img{width:90px;height:90px;display:block;margin:6px auto 3px;}
+  </style></head><body>${node.outerHTML}</body></html>`);
+  doc.close();
+  const fire=()=>{try{f.contentWindow.focus();f.contentWindow.print();}finally{setTimeout(()=>f.remove(),500);}};
+  const imgs=doc.images;
+  if(!imgs.length){fire();return;}
+  let pending=imgs.length;
+  const done=()=>{if(--pending<=0)fire();};
+  Array.from(imgs).forEach(img=>{
+    if(img.complete){done();}
+    else{img.addEventListener('load',done);img.addEventListener('error',done);}
+  });
 }
 async function delRoom(rid,rnum){
   if(!confirm(`Delete Room ${rnum}?`)) return;
