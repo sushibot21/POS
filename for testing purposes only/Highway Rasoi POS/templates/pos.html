@@ -837,15 +837,27 @@ async function loadOpenOrders(){
         <div style="font-size:13px;font-weight:700">${o.order_type==='dine_in'?`🪑 Table ${o.table_number||'?'}`:`🥡 ${o.customer_name||'Walk-in'}`}</div>
         <div style="font-size:11px;color:var(--text2);margin-top:2px">#${o.id} · ${o.item_count} items · ${new Date(o.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
       </div>
-      <div style="text-align:right">
-        <div style="font-family:'Plus Jakarta Sans';font-weight:700;font-size:14px">${C}${(o.total||0).toFixed(0)}</div>
-        <span class="badge badge-orange" style="font-size:10px">Open</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="text-align:right">
+          <div style="font-family:'Plus Jakarta Sans';font-weight:700;font-size:14px">${C}${(o.total||0).toFixed(0)}</div>
+          <span class="badge badge-orange" style="font-size:10px">Open</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();cancelOpenOrder(${o.id})" title="Cancel order — restores stock, frees table" style="color:var(--red);border-color:#fecaca;padding:4px 10px;font-size:11px">✕ Cancel</button>
       </div>
     </div>`).join('');
 }
 async function resumeOrder(oid,type,tnum,cname){
   curOid=oid;setOpHeader(type==='dine_in'?`Table ${tnum}`:`🥡 ${cname||'Walk-in'}`,`Order #${oid}`);
   showOpControls();await loadItems();switchTab('menu');
+}
+async function cancelOpenOrder(oid){
+  if(!confirm(`Cancel order #${oid}?\n\nThis restores stock and frees the table.\nUse this to clean up duplicate / mistaken orders.`)) return;
+  const r=await fetch(`/api/order/${oid}/cancel`,{method:'POST'});
+  const d=await r.json();
+  if(!d.ok){toast(d.error||'Could not cancel order','error');return;}
+  toast(`Order #${oid} cancelled`);
+  if(curOid===oid) resetPanel();
+  await Promise.all([loadOpenOrders(),loadTables()]);
 }
 
 // ── PAYMENT ───────────────────────────────────────────────────────────────────

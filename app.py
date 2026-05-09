@@ -1081,6 +1081,34 @@ def close_order(oid):
     log_action('close_order','order','Order #'+str(oid)+' '+str(method)+('+'+str(subtype) if subtype else ''), conn=conn)
     conn.commit(); conn.close(); broadcast('order_closed',{'order_id':oid}); return jsonify({'ok':True})
 
+@app.route('/api/order/<int:oid>/cancel', methods=['POST'])
+@login_required
+def cancel_order(oid):
+    """Abandon an open order: restore stock, free the table (if dine-in), mark cancelled.
+    Use this to clean up duplicate / mistakenly-opened orders without going through
+    the normal close flow (which requires a customer + payment)."""
+    conn=get_db()
+    order=conn.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+    if not order:
+        conn.close(); return jsonify({'ok':False,'error':'Order not found'}), 404
+    if order['status']!='open':
+        conn.close(); return jsonify({'ok':False,'error':f"Order is already {order['status']}"}), 400
+    # Restore stock for every item still attached to this order
+    items=conn.execute('SELECT item_id,quantity FROM order_items WHERE order_id=?',(oid,)).fetchall()
+    for item in items:
+        conn.execute('UPDATE menu_items SET stock=stock+? WHERE id=?',(item['quantity'],item['item_id']))
+        for p in conn.execute('SELECT * FROM menu_portions WHERE menu_item_id=?',(item['item_id'],)).fetchall():
+            conn.execute('UPDATE inventory SET stock=stock+? WHERE id=?',(p['qty_used']*item['quantity'],p['inventory_id']))
+    # Mark cancelled (keep the order_items rows for audit)
+    conn.execute("UPDATE orders SET status='cancelled', closed_at=datetime('now','localtime') WHERE id=?",(oid,))
+    # Free the table only if this was a dine-in order
+    if order['table_id'] and order['order_type']=='dine_in':
+        conn.execute("UPDATE tables SET status='free' WHERE id=?",(order['table_id'],))
+    log_action('cancel_order','order','Order #'+str(oid)+' cancelled', conn=conn)
+    conn.commit(); conn.close()
+    broadcast('order_cancelled',{'order_id':oid})
+    return jsonify({'ok':True})
+
 @app.route('/api/orders/open')
 @login_required
 def open_orders():
