@@ -58,14 +58,17 @@ if USE_TURSO:
         return v.get('value')
 
     class _TursoRow:
-        """sqlite3.Row-compatible: row['col'], row[idx], len(row), dict(row)."""
+        """sqlite3.Row-compatible: row['col'], row[idx], len(row), dict(row).
+        Lookup is case-insensitive (Turso/libsql normalizes some column names
+        like `key` to `KEY` because they're reserved words in other SQL dialects)."""
         __slots__ = ('_cols', '_vals')
         def __init__(self, cols, vals):
-            self._cols = cols
+            # Lowercase storage so dict(row) keys match the declared schema case
+            self._cols = [(c or '').lower() for c in cols]
             self._vals = list(vals)
         def __getitem__(self, key):
             if isinstance(key, str):
-                try: return self._vals[self._cols.index(key)]
+                try: return self._vals[self._cols.index(key.lower())]
                 except ValueError: raise KeyError(key)
             return self._vals[key]
         def __len__(self): return len(self._vals)
