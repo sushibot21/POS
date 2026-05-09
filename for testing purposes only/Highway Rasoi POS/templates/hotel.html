@@ -180,6 +180,12 @@
 
   <!-- ROOMS VIEW -->
   <div id="view-rooms" class="panel" style="display:none">
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <label style="font-size:13px;font-weight:600;color:var(--text2);margin:0">Check availability for:</label>
+      <input type="date" id="rooms-date" onchange="onRoomsDateChange()" style="width:170px;margin:0">
+      <button class="btn btn-ghost btn-sm" id="rooms-date-clear" onclick="clearRoomsDate()" style="display:none">Show today (live)</button>
+      <span id="rooms-date-info" style="font-size:12px;color:var(--text3);margin-left:auto"></span>
+    </div>
     <div id="floors-container"><div style="text-align:center;color:var(--text3);padding:40px">Loading...</div></div>
   </div>
 
@@ -306,6 +312,41 @@ let calRef = new Date();          // first day of currently-shown month
 let yearOccCache = {};            // {YYYY-MM: avgPct}
 let curDayDetail = null;
 let guestCache = {};
+let roomsDateISO = '';            // '' = live view; ISO date = show availability for that day
+let roomsDateAvail = null;        // {room_id: booking} for the picked date
+
+async function onRoomsDateChange(){
+  const v = document.getElementById('rooms-date').value || '';
+  if (!v) { clearRoomsDate(); return; }
+  roomsDateISO = v;
+  document.getElementById('rooms-date-clear').style.display = '';
+  document.getElementById('rooms-date-info').textContent = 'Loading…';
+  try {
+    const r = await fetch(`/api/hotel/calendar?start=${roomsDateISO}&end=${roomsDateISO}`);
+    const data = await r.json();
+    const dayRec = (data.days||{})[roomsDateISO] || {bookings:[]};
+    const map = {};
+    for (const b of (dayRec.bookings||[])) map[b.room_id] = b;
+    roomsDateAvail = map;
+    const bookedCount = Object.keys(map).length;
+    const totalRooms = allRooms.length;
+    document.getElementById('rooms-date-info').textContent =
+      `${totalRooms - bookedCount} of ${totalRooms} free on ${roomsDateISO}`;
+  } catch (e) {
+    roomsDateAvail = null;
+    document.getElementById('rooms-date-info').textContent = 'Could not load availability';
+  }
+  renderRooms();
+}
+
+function clearRoomsDate(){
+  roomsDateISO = '';
+  roomsDateAvail = null;
+  document.getElementById('rooms-date').value = '';
+  document.getElementById('rooms-date-clear').style.display = 'none';
+  document.getElementById('rooms-date-info').textContent = '';
+  renderRooms();
+}
 
 function localDate(d){d=d||new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function fmtDateLong(iso){const d=new Date(iso+'T00:00');return d.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});}
@@ -497,6 +538,11 @@ function renderRooms(){
 }
 
 function renderRoomCard(r){
+  // Date-filter mode: each card reflects availability for the selected date,
+  // not the live room status. Triggered when the user picks a date in the
+  // Rooms-view filter at the top of the panel.
+  if (roomsDateISO && roomsDateAvail) return renderRoomCardForDate(r);
+
   const sc={available:'s-avail',occupied:'s-occupied',reserved:'s-reserved',maintenance:'s-maintenance'};
   const statusLabel={available:'Available',occupied:'Occupied',reserved:'Reserved',maintenance:'Maintenance'};
   return `<div class="room-card ${r.status}" onclick="openRoomDetail(${r.id})">
@@ -516,6 +562,34 @@ function renderRoomCard(r){
       ${r.status==='occupied'||r.status==='reserved'?`<button class="btn btn-danger btn-sm" onclick="doCheckout(${r.id})">Check Out</button>`:''}
       <button class="btn btn-ghost btn-sm" onclick="editRoom(${r.id})">Edit</button>
       <button class="btn btn-danger btn-sm" onclick="delRoom(${r.id},'${r.room_number}')">✕</button>
+    </div>
+  </div>`;
+}
+
+function renderRoomCardForDate(r){
+  const todayISO = localDate();
+  const isPast = roomsDateISO < todayISO;
+  const isMaint = r.status === 'maintenance';
+  const booking = roomsDateAvail[r.id]; // booking covering the chosen date, if any
+  let cls, label, sclass;
+  if (isMaint)        { cls = 'maintenance'; sclass = 's-maintenance'; label = 'Maintenance'; }
+  else if (booking)   { cls = 'occupied';    sclass = 's-occupied';    label = 'Booked'; }
+  else                { cls = 'available';   sclass = 's-avail';       label = 'Free'; }
+  return `<div class="room-card ${cls}" onclick="openRoomDetail(${r.id})">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div class="room-num">${r.room_number}</div>
+        <div class="room-type">${r.room_type} · ${r.capacity} guests</div>
+      </div>
+      <div class="room-status ${sclass}" title="for ${roomsDateISO}">${label} · ${roomsDateISO}</div>
+    </div>
+    ${booking?`<div class="room-guest">👤 ${booking.guest_name||'—'}${booking.phone?` · ${booking.phone}`:''}</div>`:''}
+    ${booking?`<div class="room-dates">${booking.checkin_date} → ${booking.checkout_date}</div>`:''}
+    <div class="room-price">${C}${r.price_per_night}/night</div>
+    <div class="room-actions" onclick="event.stopPropagation()">
+      ${(!booking && !isMaint && !isPast)?`<button class="btn btn-primary btn-sm" onclick="openCheckinForDate(${r.id},'${r.room_number}',${r.price_per_night},'${roomsDateISO}')">Book for ${roomsDateISO}</button>`:''}
+      ${booking?`<button class="btn btn-ghost btn-sm" onclick="openHotelBill(${r.id})">🖨 Bill</button>`:''}
+      <button class="btn btn-ghost btn-sm" onclick="editRoom(${r.id})">Edit</button>
     </div>
   </div>`;
 }
