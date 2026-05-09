@@ -19,13 +19,13 @@ services:
     branch: main
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --workers 1 --bind 0.0.0.0:$PORT app:app
+    startCommand: gunicorn --worker-class gthread --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT app:app
     healthCheckPath: /login
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: SOCKETIO_ASYNC_MODE
-        value: gevent
+        value: threading
       # Embedded-replica file lives in /tmp; gets rebuilt from Turso on each boot.
       - key: DB_PATH
         value: /tmp/pos_replica.db
