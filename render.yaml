@@ -1,11 +1,15 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
-# Deploy this app from a GitHub repo by clicking
-# "New +" -> "Blueprint" in the Render dashboard and pointing it at the repo.
+# Deploy: New +  ->  Blueprint  ->  pick this repo.
 #
-# IMPORTANT: this Blueprint declares a 1 GB persistent disk. Persistent disks
-# are a paid add-on (~$1/mo) — the rest of the service runs on Render's free
-# tier. Without the disk, the SQLite database and uploaded images are wiped
-# on every redeploy.
+# Storage strategy: Render free tier has no persistent disk, so the SQLite
+# database is hosted on Turso (managed libSQL). The app uses an embedded
+# replica at /tmp on the Render instance — reads are fast and local, writes
+# are propagated to Turso automatically. On every redeploy /tmp is wiped and
+# the replica is rebuilt from Turso, so no data loss.
+#
+# Uploaded images (logo) live on the ephemeral filesystem and DO reset on
+# each deploy. For a small POS that's usually fine — re-upload the logo once
+# after a deploy. We can move them to object storage later if needed.
 
 services:
   - type: web
@@ -17,21 +21,14 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --worker-class eventlet --workers 1 --bind 0.0.0.0:$PORT app:app
     healthCheckPath: /login
-    disk:
-      name: pos-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: SOCKETIO_ASYNC_MODE
         value: eventlet
+      # Embedded-replica file lives in /tmp; gets rebuilt from Turso on each boot.
       - key: DB_PATH
-        value: /var/data/pos.db
-      - key: UPLOAD_FOLDER
-        value: /var/data/uploads
-      - key: UPLOAD_URL_PREFIX
-        value: /uploads
+        value: /tmp/pos_replica.db
       # Secrets — set fresh values in the Render dashboard before first deploy.
       # `sync: false` means Render will not read these from the Blueprint and
       # will instead prompt you for the value during setup.
@@ -40,4 +37,8 @@ services:
       - key: ADMIN_ID
         sync: false
       - key: ADMIN_PASS
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
         sync: false

@@ -20,7 +20,102 @@ ADMIN_ID = os.environ.get('ADMIN_ID', 'POSADMIN2024')
 ADMIN_PASS = os.environ.get('ADMIN_PASS', 'Adm!nX9@Secure')
 
 # ── DB ────────────────────────────────────────────────────────────────────────
+# When TURSO_DATABASE_URL + TURSO_AUTH_TOKEN are set, the app uses Turso (libsql)
+# with a local embedded replica at DB_PATH. Reads stay fast and local; commits
+# call conn.sync() to push writes to the Turso cloud, so data survives container
+# restarts and redeploys. Without those env vars, we fall back to plain sqlite3.
+TURSO_URL = os.environ.get('TURSO_DATABASE_URL', '').strip()
+TURSO_TOKEN = os.environ.get('TURSO_AUTH_TOKEN', '').strip()
+USE_TURSO = bool(TURSO_URL and TURSO_TOKEN)
+
+if USE_TURSO:
+    import libsql_experimental as _libsql
+
+    class _LibsqlRow:
+        """Behaves like sqlite3.Row: row['col'] / row[idx] / len(row) / dict(row)."""
+        __slots__ = ('_columns', '_values')
+        def __init__(self, columns, values):
+            self._columns = columns
+            self._values = values if isinstance(values, tuple) else tuple(values)
+        def __getitem__(self, key):
+            if isinstance(key, str):
+                try: return self._values[self._columns.index(key)]
+                except ValueError: raise KeyError(key)
+            return self._values[key]
+        def __len__(self): return len(self._values)
+        def __iter__(self): return iter(self._values)
+        def keys(self): return list(self._columns)
+        def get(self, key, default=None):
+            try: return self[key]
+            except (KeyError, IndexError): return default
+        def __repr__(self):
+            return f"<Row {dict(zip(self._columns, self._values))}>"
+
+    class _LibsqlCursor:
+        def __init__(self, cur):
+            self._cur = cur
+            self._cols = None
+        def _columns(self):
+            if self._cols is None:
+                desc = self._cur.description
+                self._cols = [d[0] for d in desc] if desc else []
+            return self._cols
+        def fetchone(self):
+            r = self._cur.fetchone()
+            return _LibsqlRow(self._columns(), r) if r is not None else None
+        def fetchall(self):
+            return [_LibsqlRow(self._columns(), r) for r in self._cur.fetchall()]
+        def fetchmany(self, *a):
+            return [_LibsqlRow(self._columns(), r) for r in self._cur.fetchmany(*a)]
+        def __iter__(self):
+            cols = self._columns()
+            for r in self._cur:
+                yield _LibsqlRow(cols, r)
+        @property
+        def lastrowid(self):
+            return getattr(self._cur, 'lastrowid', None)
+        @property
+        def rowcount(self):
+            return getattr(self._cur, 'rowcount', -1)
+        @property
+        def description(self):
+            return self._cur.description
+        def __getattr__(self, name):
+            return getattr(self._cur, name)
+
+    class _LibsqlConn:
+        def __init__(self, conn):
+            self._conn = conn
+        def execute(self, *a, **kw):
+            return _LibsqlCursor(self._conn.execute(*a, **kw))
+        def executemany(self, *a, **kw):
+            return _LibsqlCursor(self._conn.executemany(*a, **kw))
+        def executescript(self, script):
+            if hasattr(self._conn, 'executescript'):
+                return self._conn.executescript(script)
+            # Fallback: split & execute one statement at a time
+            for stmt in script.split(';'):
+                s = stmt.strip()
+                if s: self._conn.execute(s)
+        def cursor(self):
+            return _LibsqlCursor(self._conn.cursor())
+        def commit(self):
+            r = self._conn.commit()
+            try: self._conn.sync()  # push local writes to Turso cloud
+            except Exception: pass
+            return r
+        def close(self): return self._conn.close()
+        def rollback(self):
+            if hasattr(self._conn, 'rollback'): return self._conn.rollback()
+        def __getattr__(self, name):
+            return getattr(self._conn, name)
+
 def get_db():
+    if USE_TURSO:
+        conn = _libsql.connect(DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
+        try: conn.sync()  # pull latest state from Turso cloud
+        except Exception: pass
+        return _LibsqlConn(conn)
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
