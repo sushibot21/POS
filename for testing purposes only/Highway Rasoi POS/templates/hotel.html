@@ -40,6 +40,7 @@
 .cal-cell:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(26,23,20,0.08);}
 .cal-cell.empty{visibility:hidden;}
 .cal-cell.today{outline:2px solid var(--accent);outline-offset:-2px;}
+.cal-cell.selected{box-shadow:0 0 0 3px rgba(37,99,235,0.35);transform:translateY(-1px);}
 .cal-day-num{font-size:14px;font-weight:600;}
 .cal-occ{font-size:10px;font-weight:600;align-self:flex-end;opacity:0.85;}
 .cal-occ-bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(0,0,0,0.06);}
@@ -420,8 +421,11 @@ function showDay(iso){
   const total = data.rooms_total || allRooms.length || 0;
   const pct = total ? Math.round((rec.booked/total)*100) : 0;
   document.getElementById('dd-stats').textContent = `${rec.booked} of ${total} rooms booked · ${pct}% occupancy`;
+
+  // Existing-bookings section
+  let bookingsHtml = '';
   if (rec.bookings.length) {
-    document.getElementById('dd-list').innerHTML = rec.bookings.map(b=>`
+    bookingsHtml = rec.bookings.map(b=>`
       <div class="dd-row">
         <div class="dd-room">Room ${b.room_number}</div>
         <div class="dd-guest">${b.guest_name || '—'} ${b.phone?`<span style="color:var(--text3);font-weight:400">· ${b.phone}</span>`:''}</div>
@@ -429,10 +433,54 @@ function showDay(iso){
         <div class="dd-status st-${b.status}">${b.status.replace('_',' ')}</div>
       </div>`).join('');
   } else {
-    document.getElementById('dd-list').innerHTML = `<div style="color:var(--text3);font-size:12px;padding:8px">No bookings on this day.</div>`;
+    bookingsHtml = `<div style="color:var(--text3);font-size:12px;padding:8px">No bookings on this day.</div>`;
   }
+
+  // "Book a room on this date" section — only for today / future
+  const todayISO = localDate();
+  const isPast = iso < todayISO;
+  const bookedRoomIds = new Set((rec.bookings || []).map(b => b.room_id));
+  const available = allRooms.filter(r => r.status !== 'maintenance' && !bookedRoomIds.has(r.id));
+  let availHtml = '';
+  if (isPast) {
+    availHtml = `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);color:var(--text3);font-size:12px">📅 Past date — cannot book new rooms.</div>`;
+  } else if (!available.length) {
+    availHtml = `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);color:var(--text3);font-size:12px">All rooms are booked / unavailable on this day.</div>`;
+  } else {
+    availHtml = `
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">📅 Book a room for ${iso} (${available.length} available)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${available.map(r=>`
+            <button class="btn btn-primary btn-sm" onclick="openCheckinForDate(${r.id},'${r.room_number}',${r.price_per_night},'${iso}')" style="font-size:12px">
+              Room ${r.room_number} · ${C}${r.price_per_night}
+            </button>
+          `).join('')}
+        </div>
+      </div>`;
+  }
+
+  document.getElementById('dd-list').innerHTML = bookingsHtml + availHtml;
   dd.classList.add('show');
   curDayDetail = iso;
+
+  // Visually mark the selected day cell
+  document.querySelectorAll('.cal-cell.selected').forEach(c => c.classList.remove('selected'));
+  const sel = document.querySelector(`.cal-cell[data-iso="${iso}"]`);
+  if (sel) sel.classList.add('selected');
+}
+
+function openCheckinForDate(rid, rnum, price, iso){
+  // Open the existing checkin modal then override the default today/tomorrow
+  // with the day the user picked from the calendar.
+  openCheckin(rid, rnum, price);
+  try {
+    const next = new Date(iso + 'T00:00');
+    next.setDate(next.getDate() + 1);
+    document.getElementById('ci-in').value = iso;
+    document.getElementById('ci-out').value = localDate(next);
+    calcNights();
+  } catch (e) { /* fall through to defaults */ }
 }
 
 // ────── ROOMS ──────
