@@ -20,102 +20,178 @@ ADMIN_ID = os.environ.get('ADMIN_ID', 'POSADMIN2024')
 ADMIN_PASS = os.environ.get('ADMIN_PASS', 'Adm!nX9@Secure')
 
 # ── DB ────────────────────────────────────────────────────────────────────────
-# When TURSO_DATABASE_URL + TURSO_AUTH_TOKEN are set, the app uses Turso (libsql)
-# with a local embedded replica at DB_PATH. Reads stay fast and local; commits
-# call conn.sync() to push writes to the Turso cloud, so data survives container
-# restarts and redeploys. Without those env vars, we fall back to plain sqlite3.
+# When TURSO_DATABASE_URL + TURSO_AUTH_TOKEN are set, the app talks to Turso
+# directly over its v2/pipeline HTTP API using only the Python stdlib (no Rust,
+# no async, no extra deps). Each conn.execute() is one auto-committed HTTPS
+# call. Without those env vars, fall back to local sqlite3 for dev.
 TURSO_URL = os.environ.get('TURSO_DATABASE_URL', '').strip()
 TURSO_TOKEN = os.environ.get('TURSO_AUTH_TOKEN', '').strip()
 USE_TURSO = bool(TURSO_URL and TURSO_TOKEN)
 
 if USE_TURSO:
-    import libsql_experimental as _libsql
+    import urllib.request, urllib.error
 
-    class _LibsqlRow:
-        """Behaves like sqlite3.Row: row['col'] / row[idx] / len(row) / dict(row)."""
-        __slots__ = ('_columns', '_values')
-        def __init__(self, columns, values):
-            self._columns = columns
-            self._values = values if isinstance(values, tuple) else tuple(values)
+    _TURSO_HTTP = TURSO_URL
+    if _TURSO_HTTP.startswith('libsql://'):
+        _TURSO_HTTP = 'https://' + _TURSO_HTTP[len('libsql://'):]
+    _TURSO_ENDPOINT = _TURSO_HTTP.rstrip('/') + '/v2/pipeline'
+
+    def _to_turso(v):
+        if v is None: return {'type': 'null'}
+        if isinstance(v, bool): return {'type': 'integer', 'value': '1' if v else '0'}
+        if isinstance(v, int): return {'type': 'integer', 'value': str(v)}
+        if isinstance(v, float): return {'type': 'float', 'value': v}
+        if isinstance(v, bytes): return {'type': 'blob', 'base64': base64.b64encode(v).decode('ascii')}
+        return {'type': 'text', 'value': str(v)}
+
+    def _from_turso(v):
+        t = v.get('type')
+        if t == 'null': return None
+        if t == 'integer':
+            try: return int(v['value'])
+            except (TypeError, ValueError): return None
+        if t == 'float':
+            try: return float(v['value'])
+            except (TypeError, ValueError): return None
+        if t == 'text': return v.get('value', '')
+        if t == 'blob': return base64.b64decode(v.get('base64', ''))
+        return v.get('value')
+
+    class _TursoRow:
+        """sqlite3.Row-compatible: row['col'], row[idx], len(row), dict(row)."""
+        __slots__ = ('_cols', '_vals')
+        def __init__(self, cols, vals):
+            self._cols = cols
+            self._vals = list(vals)
         def __getitem__(self, key):
             if isinstance(key, str):
-                try: return self._values[self._columns.index(key)]
+                try: return self._vals[self._cols.index(key)]
                 except ValueError: raise KeyError(key)
-            return self._values[key]
-        def __len__(self): return len(self._values)
-        def __iter__(self): return iter(self._values)
-        def keys(self): return list(self._columns)
+            return self._vals[key]
+        def __len__(self): return len(self._vals)
+        def __iter__(self): return iter(self._vals)
+        def keys(self): return list(self._cols)
         def get(self, key, default=None):
             try: return self[key]
             except (KeyError, IndexError): return default
         def __repr__(self):
-            return f"<Row {dict(zip(self._columns, self._values))}>"
+            return f"<Row {dict(zip(self._cols, self._vals))}>"
 
-    class _LibsqlCursor:
-        def __init__(self, cur):
-            self._cur = cur
-            self._cols = None
-        def _columns(self):
-            if self._cols is None:
-                desc = self._cur.description
-                self._cols = [d[0] for d in desc] if desc else []
-            return self._cols
-        def fetchone(self):
-            r = self._cur.fetchone()
-            return _LibsqlRow(self._columns(), r) if r is not None else None
-        def fetchall(self):
-            return [_LibsqlRow(self._columns(), r) for r in self._cur.fetchall()]
-        def fetchmany(self, *a):
-            return [_LibsqlRow(self._columns(), r) for r in self._cur.fetchmany(*a)]
-        def __iter__(self):
-            cols = self._columns()
-            for r in self._cur:
-                yield _LibsqlRow(cols, r)
-        @property
-        def lastrowid(self):
-            return getattr(self._cur, 'lastrowid', None)
-        @property
-        def rowcount(self):
-            return getattr(self._cur, 'rowcount', -1)
-        @property
-        def description(self):
-            return self._cur.description
-        def __getattr__(self, name):
-            return getattr(self._cur, name)
-
-    class _LibsqlConn:
+    class _TursoCursor:
         def __init__(self, conn):
             self._conn = conn
-        def execute(self, *a, **kw):
-            return _LibsqlCursor(self._conn.execute(*a, **kw))
-        def executemany(self, *a, **kw):
-            return _LibsqlCursor(self._conn.executemany(*a, **kw))
+            self._cols = []
+            self._rows = []
+            self._idx = 0
+            self.lastrowid = None
+            self.rowcount = -1
+        def _set_result(self, result):
+            self._cols = []
+            self._rows = []
+            self._idx = 0
+            self.lastrowid = None
+            self.rowcount = -1
+            if result is None: return
+            self._cols = [c.get('name','') for c in result.get('cols', [])]
+            self._rows = [[_from_turso(v) for v in row] for row in result.get('rows', [])]
+            lir = result.get('last_insert_rowid')
+            if lir is not None:
+                try: self.lastrowid = int(lir)
+                except (TypeError, ValueError): pass
+            self.rowcount = result.get('affected_row_count', -1)
+        @property
+        def description(self):
+            return [(c, None, None, None, None, None, None) for c in self._cols] if self._cols else None
+        def execute(self, sql, params=None):
+            return self._conn.execute(sql, params, _into=self)
         def executescript(self, script):
-            if hasattr(self._conn, 'executescript'):
-                return self._conn.executescript(script)
-            # Fallback: split & execute one statement at a time
-            for stmt in script.split(';'):
-                s = stmt.strip()
-                if s: self._conn.execute(s)
-        def cursor(self):
-            return _LibsqlCursor(self._conn.cursor())
-        def commit(self):
-            r = self._conn.commit()
-            try: self._conn.sync()  # push local writes to Turso cloud
-            except Exception: pass
-            return r
-        def close(self): return self._conn.close()
-        def rollback(self):
-            if hasattr(self._conn, 'rollback'): return self._conn.rollback()
-        def __getattr__(self, name):
-            return getattr(self._conn, name)
+            self._conn.executescript(script)
+            return self
+        def fetchone(self):
+            if self._idx < len(self._rows):
+                r = self._rows[self._idx]; self._idx += 1
+                return _TursoRow(self._cols, r)
+            return None
+        def fetchall(self):
+            rest = self._rows[self._idx:]
+            self._idx = len(self._rows)
+            return [_TursoRow(self._cols, r) for r in rest]
+        def fetchmany(self, size=1):
+            end = min(self._idx + size, len(self._rows))
+            chunk = self._rows[self._idx:end]
+            self._idx = end
+            return [_TursoRow(self._cols, r) for r in chunk]
+        def __iter__(self):
+            while True:
+                r = self.fetchone()
+                if r is None: break
+                yield r
+        def close(self): pass
+
+    class _TursoConn:
+        def __init__(self): self._closed = False
+
+        @staticmethod
+        def _stmt_req(sql, params=None):
+            args, named = [], []
+            if params is not None:
+                if isinstance(params, dict):
+                    named = [{'name': k, 'value': _to_turso(v)} for k, v in params.items()]
+                elif params:
+                    args = [_to_turso(p) for p in params]
+            return {'type': 'execute', 'stmt': {'sql': sql, 'args': args, 'named_args': named}}
+
+        def _post(self, requests):
+            body = json.dumps({'requests': requests}).encode('utf-8')
+            req = urllib.request.Request(
+                _TURSO_ENDPOINT, data=body, method='POST',
+                headers={'Authorization': f'Bearer {TURSO_TOKEN}', 'Content-Type': 'application/json'},
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    return json.loads(resp.read().decode('utf-8'))
+            except urllib.error.HTTPError as e:
+                detail = e.read().decode('utf-8', errors='replace')[:500]
+                raise RuntimeError(f'Turso HTTP {e.code}: {detail}')
+
+        def execute(self, sql, params=None, _into=None):
+            if self._closed: raise RuntimeError('Connection is closed')
+            resp = self._post([self._stmt_req(sql, params), {'type': 'close'}])
+            results = resp.get('results') or []
+            first = results[0] if results else {}
+            if first.get('type') != 'ok':
+                err = first.get('error') or {}
+                raise RuntimeError(f"Turso SQL error: {err.get('message','unknown')} | sql: {sql[:160]}")
+            cur = _into or _TursoCursor(self)
+            cur._set_result(first['response']['result'])
+            return cur
+
+        def executemany(self, sql, params_list):
+            cur = _TursoCursor(self)
+            for p in params_list:
+                self.execute(sql, p, _into=cur)
+            return cur
+
+        def executescript(self, script):
+            stmts = [s.strip() for s in script.split(';') if s.strip()]
+            if not stmts: return _TursoCursor(self)
+            reqs = [self._stmt_req(s) for s in stmts]
+            reqs.append({'type': 'close'})
+            resp = self._post(reqs)
+            for r in resp.get('results') or []:
+                if r.get('type') == 'error' or (r.get('type') != 'ok' and r.get('error')):
+                    err = r.get('error') or {}
+                    raise RuntimeError(f"Turso SQL error in script: {err.get('message','unknown')}")
+            return _TursoCursor(self)
+
+        def cursor(self): return _TursoCursor(self)
+        def commit(self): pass     # auto-committed per execute
+        def rollback(self): pass   # cannot roll back auto-committed statements
+        def close(self): self._closed = True
 
 def get_db():
     if USE_TURSO:
-        conn = _libsql.connect(DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
-        try: conn.sync()  # pull latest state from Turso cloud
-        except Exception: pass
-        return _LibsqlConn(conn)
+        return _TursoConn()
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row

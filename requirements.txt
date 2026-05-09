@@ -3,4 +3,3 @@ flask-socketio>=5.3.6
 werkzeug>=3.0.0
 gunicorn>=21.2.0
 simple-websocket>=1.0.0
-libsql-experimental>=0.0.40
