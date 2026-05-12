@@ -20,27 +20,6 @@ hotel management, customer due tracking, and a live mobile dashboard.
 
 ---
 
-## 🔐 Login Credentials
-
-### Admin Portal
-| Field    | Value           |
-|----------|----------------|
-| URL      | `/admin/login` |
-| Admin ID | `POSADMIN2024` |
-| Password | `Adm!nX9@Secure` |
-
-> **Keep these safe.** The admin can create, edit, and delete biller accounts.
-
-### Default Biller (first login)
-| Field      | Value        |
-|------------|-------------|
-| Biller ID  | `BILLER001` |
-| Password   | `Pass@1234` |
-
-> Change this password from the Admin Portal after first login.
-
----
-
 ## 📱 Remote Access (Access from phone / anywhere)
 
 ### Same Wi-Fi (recommended for table service)
